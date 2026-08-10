@@ -1,0 +1,229 @@
+/**
+ * Global styles hold layout primitives so route components stay focused on the
+ * app surfaces they represent. If every stub owned its own shell styling, route
+ * navigation would drift before the real features arrive.
+ */
+@import "./theme.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--color-app);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, var(--color-app-sheen), var(--color-transparent)),
+    var(--color-app);
+}
+
+.app-sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-panel);
+  transition: width 160ms ease, min-width 160ms ease;
+}
+
+.sidebar-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100vh;
+  padding: 18px 12px;
+  position: sticky;
+  top: 0;
+}
+
+.brand-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+}
+
+.brand-name {
+  min-width: 0;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sidebar-collapsed .brand-name,
+.sidebar-collapsed .nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.icon-button,
+.nav-link,
+.action-button {
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  background: transparent;
+}
+
+.icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+}
+
+.icon-button:hover,
+.nav-link:hover,
+.action-button:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.nav-list {
+  display: grid;
+  gap: 4px;
+}
+
+.nav-link {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 10px;
+  text-decoration: none;
+}
+
+.sidebar-collapsed .nav-link {
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 0;
+}
+
+.nav-link.active {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-surface);
+  color: var(--color-accent-strong);
+}
+
+.main-panel {
+  min-width: 0;
+  padding: 24px;
+}
+
+.route-surface {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: calc(100vh - 48px);
+}
+
+.route-header {
+  display: grid;
+  gap: 8px;
+  max-width: 760px;
+}
+
+.route-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.route-summary {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+.console-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 18px;
+}
+
+.console-line {
+  margin: 0;
+  color: var(--color-accent-strong);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.action-button {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.status-text {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    width: 100%;
+    min-width: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .sidebar-inner {
+    height: auto;
+    position: static;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .main-panel {
+    padding: 18px;
+  }
+}

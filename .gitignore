@@ -8,3 +8,9 @@ node_modules/
 *.log
 output/
 results/
+dist/
+build/
+.gh-token
+.gh-token.txt
+.git-credentials
+token.txt

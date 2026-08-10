@@ -1,0 +1,37 @@
+/**
+ * App composes routing and persistent chrome without feature-specific state so
+ * Phase 0 remains a foundation rather than a hidden product slice. If feature
+ * routes owned shell concerns now, later phases would inherit tangled layout and
+ * security wiring.
+ */
+import type { CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Route, Routes } from "react-router-dom";
+import { Sidebar } from "./components/sidebar";
+import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
+import { RouteStub } from "./components/route-stub";
+import { fallbackRoute, navigationRoutes } from "./navigation";
+
+export function AppFrame() {
+  const [collapsed, setCollapsed] = useState(() => readStoredSidebarState());
+  const sidebarWidth = collapsed ? "var(--sidebar-collapsed)" : "var(--sidebar-expanded)";
+  const shellStyle = useMemo(() => ({ "--sidebar-width": sidebarWidth }) as CSSProperties, [sidebarWidth]);
+
+  useEffect(() => {
+    writeStoredSidebarState(collapsed);
+  }, [collapsed]);
+
+  return (
+    <div className="app-shell" style={shellStyle}>
+      <Sidebar collapsed={collapsed} onCollapsedChange={setCollapsed} />
+      <main className="main-panel">
+        <Routes>
+          {navigationRoutes.map((route) => (
+            <Route key={route.id} path={route.path} element={<RouteStub route={route} />} />
+          ))}
+          <Route path={fallbackRoute.path} element={<RouteStub route={fallbackRoute} />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}
