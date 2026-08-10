@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 1;
+const MAX_PHASE = 2;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -82,6 +82,31 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/db/migrations/002-vault.ts", "api_keys", "vault migration");
   assertIncludes("src/db/migrations/003-agents.ts", "osint-agent", "agent seed migration");
   assertIncludes("src/renderer/components/settings-view.tsx", "keys:add", "settings API key controls");
+} else if (requestedPhase === 2) {
+  assertIncludes("src/main/search/orchestrator.ts", "sourceReturned", "live source arrival mechanism");
+  assertIncludes("src/main/ipc/handlers/search-handlers.ts", "search:source-returned", "IPC source arrival event");
+  assertIncludes("src/main/search/orchestrator.ts", "ObservationBatcher", "batched observation event mechanism");
+  assertIncludes("src/main/search/orchestrator.ts", "runBounded", "bounded fan-out mechanism");
+  assertIncludes("src/main/search/orchestrator.ts", "connectorTimeoutMs", "per-connector timeout mechanism");
+  assertIncludes("src/shared/ipc.ts", "search:cancel", "search cancellation channel");
+  assertIncludes("src/db/repositories/search-repository.ts", "appendObservations", "incremental persistence mechanism");
+  assertAnyTestIncludes("streams a source-returned event per source", "live source arrivals");
+  assertAnyTestIncludes("bounds connector fan-out", "bounded connector fan-out");
+  assertAnyTestIncludes("batches observation events into capped chunks", "batched observation events");
+  assertAnyTestIncludes("flushes observation batches on a timer", "timed observation flushing");
+  assertAnyTestIncludes("cancels queued connector work", "search cancellation");
+  assertAnyTestIncludes("times out a connector that ignores abort signals", "hard connector timeout");
+  assertAnyTestIncludes("writes observation batches before finalizing", "incremental persistence");
+
+  assertIncludes("src/main/search/correlation.ts", "strengthBand", "corroboration scoring mechanism");
+  assertAnyTestIncludes("promotes a 3-source entity to strong", "overlaps score by corroboration");
+
+  assertIncludes("src/db/repositories/search-repository.ts", "saveRun", "search persistence mechanism");
+  assertAnyTestIncludes("persists a search run with saveable nodes", "nodes save-able");
+
+  assertIncludes("src/main/search/source-connector.ts", "SourceConnector", "connector interface documented");
+  assertIncludes("src/main/search/connectors/index.ts", "searchConnectors", "passive connector registry");
+  assertIncludes("src/renderer/components/search-view.tsx", "Search this further", "pivot UI mechanism");
 }
 
 if (process.exitCode) {

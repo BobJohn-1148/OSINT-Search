@@ -16,7 +16,8 @@ beforeEach(() => {
   Object.defineProperty(window, "reacher", {
     configurable: true,
     value: {
-      channels: ["system:ping", "keys:list", "providers:list", "agents:list"],
+      channels: ["system:ping", "keys:list", "providers:list", "agents:list", "search:run"],
+      onSearchEvent: vi.fn().mockReturnValue(() => {}),
       invoke: vi.fn((channel: string) => {
         if (channel === "keys:list") {
           return Promise.resolve({ ok: true, value: { keys: [] } });
@@ -45,6 +46,8 @@ it("renders every stub route and the settings route so the app boots and navigat
     expect(screen.getByRole("heading", { name: route.label })).toBeInTheDocument();
     if (route.id === "settings") {
       expect(screen.getByRole("heading", { name: "API keys" })).toBeInTheDocument();
+    } else if (route.id === "search") {
+      expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }

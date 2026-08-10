@@ -5,6 +5,12 @@
  */
 import type { IpcChannel, IpcRequest, IpcResponse } from "../shared/ipc.js";
 import type { Result } from "../shared/result.js";
+import type { Observation, SourceStatus } from "../shared/types/search.js";
+
+export interface SearchEventMap {
+  readonly "search:source-returned": SourceStatus;
+  readonly "search:observations": readonly Observation[];
+}
 
 export interface ReacherBridge {
   readonly channels: readonly IpcChannel[];
@@ -12,6 +18,10 @@ export interface ReacherBridge {
     channel: TChannel,
     request: IpcRequest<TChannel>
   ): Promise<Result<IpcResponse<TChannel>>>;
+  onSearchEvent<TEvent extends keyof SearchEventMap>(
+    event: TEvent,
+    listener: (payload: SearchEventMap[TEvent]) => void
+  ): () => void;
 }
 
 declare global {

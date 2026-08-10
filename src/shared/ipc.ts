@@ -32,6 +32,16 @@ import {
   providersTestResponseSchema
 } from "./schemas/providers.js";
 import {
+  searchGetRequestSchema,
+  searchGetResponseSchema,
+  searchCancelRequestSchema,
+  searchCancelResponseSchema,
+  searchPivotRequestSchema,
+  searchPivotResponseSchema,
+  searchRunRequestSchema,
+  searchRunResponseSchema
+} from "./schemas/search.js";
+import {
   settingsGetRequestSchema,
   settingsGetResponseSchema,
   settingsSetRequestSchema,
@@ -155,6 +165,38 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Stores one agent provider and model selection."
+  }),
+  "search:run": defineChannel({
+    request: searchRunRequestSchema,
+    response: searchRunResponseSchema,
+    capability: "search.run",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs a passive OSINT search and persists the correlated result."
+  }),
+  "search:pivot": defineChannel({
+    request: searchPivotRequestSchema,
+    response: searchPivotResponseSchema,
+    capability: "search.run",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs a passive OSINT search from an observation pivot seed."
+  }),
+  "search:get": defineChannel({
+    request: searchGetRequestSchema,
+    response: searchGetResponseSchema,
+    capability: "search.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Reads one persisted correlated search run."
+  }),
+  "search:cancel": defineChannel({
+    request: searchCancelRequestSchema,
+    response: searchCancelResponseSchema,
+    capability: "search.cancel",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Cancels one active passive OSINT search run."
   })
 } as const;
 

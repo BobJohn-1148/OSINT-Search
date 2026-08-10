@@ -76,8 +76,22 @@ for (const required of ["encryptString", "decryptString", "auditRepository.recor
   }
 }
 
+const searchText = read(path.join(srcRoot, "main", "search", "orchestrator.ts"));
+for (const required of ["runBounded", "maxConcurrentConnectors", "ObservationBatcher", "connector.tier === \"passive\"", "catch", "sourceReturned"]) {
+  if (!searchText.includes(required)) {
+    fail(`search orchestrator is missing ${required}`);
+  }
+}
+
+const searchRepositoryText = read(path.join(srcRoot, "db", "repositories", "search-repository.ts"));
+for (const required of ["startRun", "appendObservations", "finalizeRun"]) {
+  if (!searchRepositoryText.includes(required)) {
+    fail(`search repository is missing ${required}`);
+  }
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 1 security invariants hold");
+console.log("PASS: Phase 2 security invariants hold");

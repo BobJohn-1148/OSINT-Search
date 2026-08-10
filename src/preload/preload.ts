@@ -5,7 +5,7 @@
  */
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type IpcChannel } from "../shared/ipc.js";
-import type { ReacherBridge } from "./api.js";
+import type { ReacherBridge, SearchEventMap } from "./api.js";
 
 const channels = Object.keys(IPC) as IpcChannel[];
 
@@ -23,6 +23,16 @@ const bridge: ReacherBridge = {
     }
 
     return ipcRenderer.invoke(channel, request);
+  },
+  onSearchEvent: (event, listener) => {
+    const allowedEvents: readonly (keyof SearchEventMap)[] = ["search:source-returned", "search:observations"];
+    if (!allowedEvents.includes(event)) {
+      return () => {};
+    }
+
+    const wrapped = (_ipcEvent: Electron.IpcRendererEvent, payload: SearchEventMap[typeof event]) => listener(payload);
+    ipcRenderer.on(event, wrapped);
+    return () => ipcRenderer.removeListener(event, wrapped);
   }
 };
 
