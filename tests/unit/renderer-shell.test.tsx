@@ -16,13 +16,25 @@ beforeEach(() => {
   Object.defineProperty(window, "reacher", {
     configurable: true,
     value: {
-      channels: ["system:ping"],
-      invoke: vi.fn().mockResolvedValue({ ok: true, value: { pong: true, nonce: "test", audited: true } })
+      channels: ["system:ping", "keys:list", "providers:list", "agents:list"],
+      invoke: vi.fn((channel: string) => {
+        if (channel === "keys:list") {
+          return Promise.resolve({ ok: true, value: { keys: [] } });
+        }
+        if (channel === "providers:list") {
+          return Promise.resolve({ ok: true, value: { providers: [] } });
+        }
+        if (channel === "agents:list") {
+          return Promise.resolve({ ok: true, value: { agents: [] } });
+        }
+
+        return Promise.resolve({ ok: true, value: { pong: true, nonce: "test", audited: true } });
+      })
     }
   });
 });
 
-it("renders every stub route so the app boots and navigates across all Phase 0 surfaces", () => {
+it("renders every stub route and the settings route so the app boots and navigates across all surfaces", () => {
   for (const route of navigationRoutes) {
     const { unmount } = render(
       <MemoryRouter initialEntries={[route.path]}>
@@ -31,7 +43,11 @@ it("renders every stub route so the app boots and navigates across all Phase 0 s
     );
 
     expect(screen.getByRole("heading", { name: route.label })).toBeInTheDocument();
-    expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
+    if (route.id === "settings") {
+      expect(screen.getByRole("heading", { name: "API keys" })).toBeInTheDocument();
+    } else {
+      expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
+    }
     unmount();
   }
 });

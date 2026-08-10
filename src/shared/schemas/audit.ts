@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-export const auditSensitivityValues = ["low", "medium", "high"] as const;
+export const auditSensitivityValues = ["low", "medium", "high", "sensitive"] as const;
 
 export const auditEventSchema = z.object({
   id: z.number().int().positive(),

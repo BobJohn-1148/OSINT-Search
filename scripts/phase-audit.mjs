@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 0;
+const MAX_PHASE = 1;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -65,6 +65,23 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/shared/ipc.ts", "zod", "IPC schema registry");
   assertIncludes("src/preload/preload.ts", "Object.keys(IPC)", "generated preload bridge");
   assertIncludes("src/db/migrations/index.ts", "migration001Core", "numbered migration index");
+} else if (requestedPhase === 1) {
+  assertIncludes("src/db/repositories/vault-repository.ts", "encryptString", "key store mechanism");
+  assertIncludes("src/db/repositories/vault-repository.ts", "readSecret", "one read gate mechanism");
+  assertAnyTestIncludes("round-trips a key encrypted", "key store/test/revoke works");
+  assertAnyTestIncludes("revoke removes the key and future reads fail closed", "key revoke fails closed");
+
+  assertIncludes("src/db/repositories/agents-repository.ts", "setModel", "per-agent model switch mechanism");
+  assertIncludes("src/main/providers/provider-adapters.ts", "testConnection", "provider adapter mechanism");
+  assertAnyTestIncludes("selects model per agent", "per-agent provider and model switch");
+  assertAnyTestIncludes("provider adapter honours the per-agent model selection", "provider adapter model selection");
+
+  assertIncludes("src/db/repositories/vault-repository.ts", "sensitivity: \"sensitive\"", "key reads audited mechanism");
+  assertAnyTestIncludes("reading a key writes an audit event with sensitivity sensitive", "key reads audited");
+
+  assertIncludes("src/db/migrations/002-vault.ts", "api_keys", "vault migration");
+  assertIncludes("src/db/migrations/003-agents.ts", "osint-agent", "agent seed migration");
+  assertIncludes("src/renderer/components/settings-view.tsx", "keys:add", "settings API key controls");
 }
 
 if (process.exitCode) {

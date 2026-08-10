@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { openDatabase } from "../db/database.js";
 import { runMigrations } from "../db/migrations/runner.js";
 import { registerIpcHandlers } from "./ipc/register.js";
+import { createVaultCrypto } from "./security/create-vault-crypto.js";
 
 const currentFile = fileURLToPath(import.meta.url);
 const currentDir = path.dirname(currentFile);
@@ -52,7 +53,8 @@ async function createMainWindow(): Promise<void> {
 void app.whenReady().then(async () => {
   const db = openDatabase();
   runMigrations(db);
-  registerIpcHandlers(db);
+  const vaultCrypto = await createVaultCrypto();
+  registerIpcHandlers(db, vaultCrypto);
 
   await createMainWindow();
 

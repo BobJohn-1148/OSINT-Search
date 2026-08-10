@@ -69,8 +69,15 @@ for (const required of ["capability", "sensitivity", "mutates", "summary"]) {
   }
 }
 
+const vaultText = read(path.join(srcRoot, "db", "repositories", "vault-repository.ts"));
+for (const required of ["encryptString", "decryptString", "auditRepository.record", "sensitivity: \"sensitive\""]) {
+  if (!vaultText.includes(required)) {
+    fail(`vault repository is missing ${required}`);
+  }
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 0 security invariants hold");
+console.log("PASS: Phase 1 security invariants hold");

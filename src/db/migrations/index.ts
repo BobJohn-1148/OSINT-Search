@@ -5,6 +5,8 @@
  */
 import type { ReacherDatabase } from "../database.js";
 import { migration001Core } from "./001-core.js";
+import { migration002Vault } from "./002-vault.js";
+import { migration003Agents } from "./003-agents.js";
 
 export interface Migration {
   readonly id: number;
@@ -12,4 +14,4 @@ export interface Migration {
   up(db: ReacherDatabase): void;
 }
 
-export const migrations: readonly Migration[] = [migration001Core];
+export const migrations: readonly Migration[] = [migration001Core, migration002Vault, migration003Agents];

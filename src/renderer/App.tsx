@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
+import { SettingsView } from "./components/settings-view";
 import { RouteStub } from "./components/route-stub";
 import { fallbackRoute, navigationRoutes } from "./navigation";
 
@@ -27,7 +28,11 @@ export function AppFrame() {
       <main className="main-panel">
         <Routes>
           {navigationRoutes.map((route) => (
-            <Route key={route.id} path={route.path} element={<RouteStub route={route} />} />
+            <Route
+              key={route.id}
+              path={route.path}
+              element={route.id === "settings" ? <SettingsView /> : <RouteStub route={route} />}
+            />
           ))}
           <Route path={fallbackRoute.path} element={<RouteStub route={fallbackRoute} />} />
         </Routes>
