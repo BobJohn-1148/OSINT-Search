@@ -1,0 +1,35 @@
+{
+  "_comment": "Idle status pool for the Agents ops-den. nsfw:true lines are hidden when the 'clean idle statuses' setting is on. Edit freely.",
+  "working_templates": [
+    "running {tool} on {seed}",
+    "correlating breach data",
+    "pivoting on {seed}",
+    "enumerating usernames",
+    "scoring corroboration",
+    "reading {n} sources"
+  ],
+  "idle": [
+    { "text": "playing Rainbow Six", "nsfw": false },
+    { "text": "blasting System of a Down", "nsfw": false },
+    { "text": "taking a shit", "nsfw": true },
+    { "text": "jerking off", "nsfw": true },
+    { "text": "grinding ranked", "nsfw": false },
+    { "text": "nmap-ing the office fridge", "nsfw": false },
+    { "text": "doomscrolling threat intel", "nsfw": false },
+    { "text": "touching grass (simulated)", "nsfw": false },
+    { "text": "arguing vim vs emacs", "nsfw": false },
+    { "text": "brute-forcing the vending machine", "nsfw": false },
+    { "text": "rotating its own API keys", "nsfw": false },
+    { "text": "pretending to read the ToS", "nsfw": false },
+    { "text": "sudo make me a sandwich", "nsfw": false },
+    { "text": "recompiling the kernel for fun", "nsfw": false },
+    { "text": "huffing an energy drink", "nsfw": false },
+    { "text": "rage-quitting a CTF", "nsfw": false },
+    { "text": "pirating a Linux ISO (it's free)", "nsfw": false },
+    { "text": "shitposting on a burner account", "nsfw": true },
+    { "text": "napping in a server rack", "nsfw": false },
+    { "text": "googling how to exit vim", "nsfw": false }
+  ],
+  "offline": [ "powered down", "AFK", "unplugged" ],
+  "error": [ "spat out a stack trace", "segfaulted", "rate-limited and salty" ]
+}
