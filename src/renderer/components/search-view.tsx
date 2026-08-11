@@ -3,7 +3,7 @@
  * of ranked links. If source arrivals were hidden until completion, the user
  * could not see which passive sources corroborated or failed during fan-out.
  */
-import { GitBranch, Play, Save, Search as SearchIcon, Square } from "lucide-react";
+import { Bot, GitBranch, Play, Save, Search as SearchIcon, Square } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { CaseRecord } from "../../shared/schemas/cases";
@@ -97,6 +97,26 @@ export function SearchView() {
       }
     });
     setStatus(result.ok ? `Saved to ${targetCase.title}` : result.error.message);
+  }
+
+  async function sendSelectedNodeToAgent(): Promise<void> {
+    if (!selectedNode) {
+      return;
+    }
+    const targetCase = await ensureCase();
+    if (!targetCase) {
+      return;
+    }
+    const seed = selectedNode.pivotSeed ?? {
+      type: run?.seed.type ?? seedType,
+      value: selectedNode.entity ?? selectedNode.label
+    };
+    const result = await invoke("agent:run", {
+      agentId: "osint-agent",
+      seed,
+      caseId: targetCase.id
+    });
+    setStatus(result.ok ? `Sent to OSINT agent for ${targetCase.title}` : result.error.message);
   }
 
   async function ensureCase(): Promise<CaseRecord | null> {
@@ -229,6 +249,10 @@ export function SearchView() {
                 <button className="action-button" type="button" onClick={() => void saveSelectedNode()}>
                   <Save size={16} aria-hidden="true" />
                   Save node
+                </button>
+                <button className="action-button" type="button" onClick={() => void sendSelectedNodeToAgent()}>
+                  <Bot size={16} aria-hidden="true" />
+                  Send to agent
                 </button>
                 {selectedNode.pivotSeed ? (
                   <button className="action-button" type="button" onClick={() => void runSearch(selectedNode.pivotSeed)}>

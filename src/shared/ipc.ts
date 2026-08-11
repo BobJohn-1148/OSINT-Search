@@ -12,6 +12,18 @@ import {
   agentsSetModelResponseSchema
 } from "./schemas/agents.js";
 import {
+  agentMemoryListRequestSchema,
+  agentMemoryListResponseSchema,
+  agentPlaybooksRequestSchema,
+  agentPlaybooksResponseSchema,
+  agentRunRequestSchema,
+  agentRunResponseSchema,
+  agentRunsRequestSchema,
+  agentRunsResponseSchema,
+  agentStatesRequestSchema,
+  agentStatesResponseSchema
+} from "./schemas/agents-runtime.js";
+import {
   caseAddItemRequestSchema,
   caseAddItemResponseSchema,
   caseSearchRequestSchema,
@@ -191,6 +203,46 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Stores one agent provider and model selection."
+  }),
+  "agent:run": defineChannel({
+    request: agentRunRequestSchema,
+    response: agentRunResponseSchema,
+    capability: "agents.run",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs one local agent job in the main process."
+  }),
+  "agent:runs": defineChannel({
+    request: agentRunsRequestSchema,
+    response: agentRunsResponseSchema,
+    capability: "agents.readHistory",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists persisted agent run history."
+  }),
+  "agent:memory:list": defineChannel({
+    request: agentMemoryListRequestSchema,
+    response: agentMemoryListResponseSchema,
+    capability: "agents.readMemory",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists shared cross-provider agent memory."
+  }),
+  "agent:states": defineChannel({
+    request: agentStatesRequestSchema,
+    response: agentStatesResponseSchema,
+    capability: "agents.readState",
+    sensitivity: "low",
+    mutates: false,
+    summary: "Lists live agent state for HQ labels."
+  }),
+  "agent:playbooks": defineChannel({
+    request: agentPlaybooksRequestSchema,
+    response: agentPlaybooksResponseSchema,
+    capability: "agents.readPlaybooks",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists reusable scheduled agent playbooks."
   }),
   "search:run": defineChannel({
     request: searchRunRequestSchema,

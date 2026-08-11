@@ -7,6 +7,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
+import { AgentsView } from "./components/agents-view";
 import { CasesView } from "./components/cases-view";
 import { ReportsView } from "./components/reports-view";
 import { Sidebar } from "./components/sidebar";
@@ -43,6 +44,8 @@ export function AppFrame() {
                   <CasesView />
                 ) : route.id === "reports" ? (
                   <ReportsView />
+                ) : route.id === "ai-agents" ? (
+                  <AgentsView />
                 ) : (
                   <RouteStub route={route} />
                 )

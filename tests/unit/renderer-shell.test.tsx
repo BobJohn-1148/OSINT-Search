@@ -25,6 +25,24 @@ function createDefaultInvokeMock() {
     if (channel === "agents:list") {
       return Promise.resolve({ ok: true as const, value: { agents: [] } });
     }
+    if (channel === "agent:states") {
+      return Promise.resolve({ ok: true as const, value: { states: [] } });
+    }
+    if (channel === "agent:runs") {
+      return Promise.resolve({ ok: true as const, value: { runs: [] } });
+    }
+    if (channel === "agent:memory:list") {
+      return Promise.resolve({ ok: true as const, value: { memory: [] } });
+    }
+    if (channel === "agent:playbooks") {
+      return Promise.resolve({ ok: true as const, value: { playbooks: [] } });
+    }
+    if (channel === "settings:get") {
+      return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "false" } });
+    }
+    if (channel === "settings:set") {
+      return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "true" } });
+    }
     if (channel === "cases:list") {
       return Promise.resolve({ ok: true as const, value: { cases: [] } });
     }
@@ -55,6 +73,13 @@ beforeEach(() => {
         "keys:list",
         "providers:list",
         "agents:list",
+        "agent:states",
+        "agent:runs",
+        "agent:memory:list",
+        "agent:playbooks",
+        "agent:run",
+        "settings:get",
+        "settings:set",
         "search:run",
         "cases:list",
         "cases:create",
@@ -66,6 +91,7 @@ beforeEach(() => {
         "report:open"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
+      onAgentEvent: vi.fn().mockReturnValue(() => {}),
       invoke: invokeMock
     }
   });
@@ -88,6 +114,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Create case" })).toBeInTheDocument();
     } else if (route.id === "reports") {
       expect(screen.getByRole("button", { name: "Generate report" })).toBeInTheDocument();
+    } else if (route.id === "ai-agents") {
+      expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -209,6 +237,86 @@ it("search route saves a selected tree node to a case so search output becomes e
     );
   });
   expect(await screen.findByText("Saved to Acme review")).toBeInTheDocument();
+});
+
+it("search route sends a selected tree node to an agent so discoveries can continue in the agent hub", async () => {
+  const user = userEvent.setup();
+  const openCase = {
+    id: "case-one",
+    title: "Acme review",
+    status: "open",
+    createdTs: "2026-08-10T10:00:00.000Z",
+    updatedTs: "2026-08-10T10:00:00.000Z",
+    tags: ["client"]
+  };
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "search:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: {
+            runId: "run-one",
+            seed: { type: "domain", value: "example.com" },
+            startedTs: "2026-08-10T10:00:00.000Z",
+            completedTs: "2026-08-10T10:00:01.000Z",
+            statuses: [],
+            observations: [],
+            entities: [],
+            tree: {
+              id: "root",
+              label: "example.com",
+              kind: "root",
+              saveable: false,
+              children: [
+                {
+                  id: "node-one",
+                  label: "example.com from RDAP",
+                  kind: "observation",
+                  sourceId: "rdap",
+                  observationId: "obs-one",
+                  entity: "example.com",
+                  strength: 3,
+                  band: "strong",
+                  saveable: true,
+                  children: []
+                }
+              ]
+            }
+          }
+        }
+      });
+    }
+    if (channel === "cases:list") {
+      return Promise.resolve({ ok: true as const, value: { cases: [openCase] } });
+    }
+    if (channel === "agent:run") {
+      return Promise.resolve({ ok: true as const, value: {} });
+    }
+
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await user.click(await screen.findByRole("button", { name: /example\.com from RDAP/i }));
+  await user.click(screen.getByRole("button", { name: "Send to agent" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith(
+      "agent:run",
+      expect.objectContaining({
+        agentId: "osint-agent",
+        caseId: "case-one",
+        seed: { type: "domain", value: "example.com" }
+      })
+    );
+  });
+  expect(await screen.findByText("Sent to OSINT agent for Acme review")).toBeInTheDocument();
 });
 
 it("cases route renders timeline items so saved evidence can be verified", async () => {

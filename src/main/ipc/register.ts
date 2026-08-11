@@ -7,6 +7,7 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import path from "node:path";
 import type { ReacherDatabase } from "../../db/database.js";
 import { AgentsRepository } from "../../db/repositories/agents-repository.js";
+import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
@@ -16,6 +17,9 @@ import { SearchRepository } from "../../db/repositories/search-repository.js";
 import type { VaultCrypto } from "../security/vault-crypto.js";
 import { searchConnectors } from "../search/connectors/index.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
+import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
+import type { AgentRuntimeEvent } from "../../shared/schemas/agents-runtime.js";
+import { createAgentRuntimeHandlers } from "./handlers/agent-runtime-handlers.js";
 import { createAgentsHandlers } from "./handlers/agents-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
@@ -39,11 +43,25 @@ type HandlerMap = {
 export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypto): void {
   const auditRepository = new AuditRepository(db);
   const agentsRepository = new AgentsRepository(db);
+  const agentRuntimeRepository = new AgentRuntimeRepository(db);
   const casesRepository = new CasesRepository(db);
   const reportsRepository = new ReportsRepository(db);
   const searchRepository = new SearchRepository(db);
   const settingsRepository = new SettingsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
+  const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
+    for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
+      webContents.send("agent:events", { events });
+    }
+  };
+  const agentRuntimeService = new AgentRuntimeService(
+    agentsRepository,
+    agentRuntimeRepository,
+    casesRepository,
+    auditRepository,
+    emitAgentEvents,
+    process.cwd()
+  );
   const reportService = new ReportService(
     casesRepository,
     reportsRepository,
@@ -60,6 +78,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createKeysHandlers(vaultRepository, auditRepository),
     ...createProvidersHandlers(vaultRepository),
     ...createAgentsHandlers(agentsRepository),
+    ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

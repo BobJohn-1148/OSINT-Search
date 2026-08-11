@@ -12,6 +12,7 @@ import { keySourceValues, type KeySource } from "../../shared/types/sources";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
 const defaultSource: KeySource = "openai";
+const cleanIdleSettingKey = "agents.cleanIdleStatuses";
 
 export function SettingsView() {
   const { invoke } = useReacherClient();
@@ -21,13 +22,15 @@ export function SettingsView() {
   const [source, setSource] = useState<KeySource>(defaultSource);
   const [secret, setSecret] = useState("");
   const [status, setStatus] = useState("Ready");
+  const [cleanIdleStatuses, setCleanIdleStatuses] = useState(false);
   const keyedSources = useMemo(() => new Set(keys.map((key) => key.source)), [keys]);
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [keyResult, providerResult, agentResult] = await Promise.all([
+    const [keyResult, providerResult, agentResult, cleanResult] = await Promise.all([
       invoke("keys:list", {}),
       invoke("providers:list", {}),
-      invoke("agents:list", {})
+      invoke("agents:list", {}),
+      invoke("settings:get", { key: cleanIdleSettingKey })
     ]);
 
     if (keyResult.ok) {
@@ -39,8 +42,11 @@ export function SettingsView() {
     if (agentResult.ok) {
       setAgents(agentResult.value.agents);
     }
+    if (cleanResult.ok) {
+      setCleanIdleStatuses(cleanResult.value.value === "true");
+    }
 
-    const error = [keyResult, providerResult, agentResult].find((result) => !result.ok);
+    const error = [keyResult, providerResult, agentResult, cleanResult].find((result) => !result.ok);
     setStatus(error?.ok === false ? error.error.message : "Settings loaded");
   }, [invoke]);
 
@@ -90,6 +96,12 @@ export function SettingsView() {
     });
     setStatus(result.ok ? `${agent.name} set to ${provider.label} ${model}` : result.error.message);
     await refresh();
+  }
+
+  async function setCleanIdle(next: boolean): Promise<void> {
+    setCleanIdleStatuses(next);
+    const result = await invoke("settings:set", { key: cleanIdleSettingKey, value: String(next) });
+    setStatus(result.ok ? "Settings saved" : result.error.message);
   }
 
   return (
@@ -184,6 +196,14 @@ export function SettingsView() {
         <h2 className="section-title" id="agents-title">
           Agents
         </h2>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={cleanIdleStatuses}
+            onChange={(event) => void setCleanIdle(event.currentTarget.checked)}
+          />
+          Clean idle statuses
+        </label>
         <div className="agent-grid">
           {agents.map((agent) => {
             const provider = providers.find((candidate) => candidate.id === agent.provider) ?? providers[0];

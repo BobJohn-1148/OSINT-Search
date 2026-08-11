@@ -90,8 +90,26 @@ for (const required of ["startRun", "appendObservations", "finalizeRun"]) {
   }
 }
 
+const agentRuntimeText = read(path.join(srcRoot, "main", "agents", "agent-runtime-service.ts"));
+for (const required of ["STEP_FORMAT.parse", "agentFindingSchema.parse", "casesRepository.addItem", "appendMemory", "auditRepository.record"]) {
+  if (!agentRuntimeText.includes(required)) {
+    fail(`agent runtime service is missing ${required}`);
+  }
+}
+
+const agentBatcherText = read(path.join(srcRoot, "main", "agents", "agent-event-batcher.ts"));
+for (const required of ["maxItems", "flushMs", "flush()"]) {
+  if (!agentBatcherText.includes(required)) {
+    fail(`agent event batcher is missing ${required}`);
+  }
+}
+
+if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
+  fail("renderer appears to launch tools or child processes");
+}
+
 if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 4 security invariants hold");
+console.log("PASS: Phase 5 security invariants hold");

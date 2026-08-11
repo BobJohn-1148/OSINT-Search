@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 4;
+const MAX_PHASE = 5;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -138,6 +138,34 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/renderer/components/reports-view.tsx", "report:generate", "reports list surface mechanism");
   assertAnyTestIncludes("output is deterministic for a fixed fixture", "deterministic output");
   assertAnyTestIncludes("reports route generates a PDF from a selected case", "reports surface");
+} else if (requestedPhase === 5) {
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "STEP_FORMAT.parse", "agent loop validates strict steps");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "agentFindingSchema.parse", "cited finding gate mechanism");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "casesRepository.addItem", "findings saved to case mechanism");
+  assertIncludes("src/db/repositories/agent-runtime-repository.ts", "appendMemory", "shared memory write mechanism");
+  assertIncludes("src/db/repositories/agent-runtime-repository.ts", "atomic", "agent success transaction mechanism");
+  assertIncludes("src/main/agents/agent-event-batcher.ts", "maxItems", "batched agent event mechanism");
+  assertIncludes("src/renderer/components/agents-view.tsx", "onAgentEvent", "batched event subscription mechanism");
+  assertIncludes("src/renderer/components/agents-view.tsx", "Clean idle statuses", "clean idle setting mechanism");
+  assertIncludes("src/renderer/components/agents-hq-scene.tsx", "spacePan ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE", "space-drag pan wiring");
+  assertIncludes("src/renderer/components/agents-hq-scene.tsx", "onDoubleClick", "double-click focus wiring");
+  assertIncludes("src/renderer/components/agents-view.tsx", "Agents list fallback", "scene fallback mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "Send to agent", "send-to-agent search handoff mechanism");
+  assertIncludes("src/db/migrations/009-agents-runtime.ts", "agent_playbooks", "playbooks persistence mechanism");
+  assertAnyTestIncludes("STEP_FORMAT parses a step with null summary and next", "strict step format");
+  assertAnyTestIncludes("memory written by agent A is readable by agent B on a different provider", "cross-provider shared memory");
+  assertAnyTestIncludes("a finding without a source is rejected", "cited rule enforced");
+  assertAnyTestIncludes("run history persists and reloads", "run history persists");
+  assertAnyTestIncludes("streams steps and cited findings", "streams steps and cited findings");
+  assertAnyTestIncludes("findings are saved to case and memory", "findings saved to case and memory");
+  assertAnyTestIncludes("cleans up saved case evidence when a run fails after case save", "failed run cleans up partial evidence");
+  assertAnyTestIncludes("status maps from agent state", "status maps from agent state");
+  assertAnyTestIncludes("idle filter respects the clean toggle", "clean idle filter");
+  assertAnyTestIncludes("camera controls are wired", "camera controls wired");
+  assertAnyTestIncludes("double-click focuses a character", "double-click focus behavior");
+  assertAnyTestIncludes("list-view fallback renders", "list fallback renders");
+  assertAnyTestIncludes("scene-init failure does not crash", "scene failure fallback");
+  assertAnyTestIncludes("search route sends a selected tree node to an agent", "send-to-agent search handoff");
 }
 
 if (process.exitCode) {
