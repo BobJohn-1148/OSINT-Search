@@ -10,6 +10,7 @@ output/
 results/
 dist/
 build/
+.generated/
 .gh-token
 .gh-token.txt
 .git-credentials

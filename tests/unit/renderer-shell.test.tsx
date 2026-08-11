@@ -80,6 +80,24 @@ function createDefaultInvokeMock() {
     if (channel === "scan:topology") {
       return Promise.resolve({ ok: true as const, value: { topology: { scanId: "scan-one", nodes: [], edges: [] } } });
     }
+    if (channel === "analyzer:evtx:import") {
+      return Promise.resolve({ ok: true as const, value: { importId: "evtx-one", events: [], findings: [] } });
+    }
+    if (channel === "analyzer:pcap:import") {
+      return Promise.resolve({ ok: true as const, value: { importId: "pcap-one", conversations: [], findings: [] } });
+    }
+    if (channel === "analyzer:dork:build") {
+      return Promise.resolve({ ok: true as const, value: { dorks: [], findings: [] } });
+    }
+    if (channel === "analyzer:mac:lookup") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { result: { mac: "00:16:3e:00:00:01", oui: "00163E", vendor: "Apple, Inc.", source: "offline" }, findings: [] }
+      });
+    }
+    if (channel === "analyzer:vuln:lookup") {
+      return Promise.resolve({ ok: true as const, value: { vulnerabilities: [], findings: [], cached: false } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -123,7 +141,12 @@ beforeEach(() => {
         "auth:list",
         "scan:run",
         "scan:get",
-        "scan:topology"
+        "scan:topology",
+        "analyzer:evtx:import",
+        "analyzer:pcap:import",
+        "analyzer:dork:build",
+        "analyzer:mac:lookup",
+        "analyzer:vuln:lookup"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
       onAgentEvent: vi.fn().mockReturnValue(() => {}),
@@ -157,6 +180,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(await screen.findByRole("button", { name: "Launch tool" })).toBeInTheDocument();
     } else if (route.id === "network-scan") {
       expect(screen.getByRole("button", { name: "Run scan" })).toBeInTheDocument();
+    } else if (route.id === "analyzers") {
+      expect(screen.getByRole("button", { name: "Build dorks" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -543,6 +568,68 @@ it("network scan route renders topology nodes from scan results so parsed hosts 
 
   expect(await screen.findByText("workstation.local (192.168.1.10)")).toBeInTheDocument();
   expect(screen.getByText("443/tcp https")).toBeInTheDocument();
+});
+
+it("analyzers route builds dorks and saves findings through IPC so query generation stays main-owned", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "cases:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          cases: [
+            {
+              id: "case-one",
+              title: "Analyzer case",
+              status: "open",
+              createdTs: "2026-08-10T10:00:00.000Z",
+              updatedTs: "2026-08-10T10:00:00.000Z",
+              tags: []
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "analyzer:dork:build") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          dorks: [{ label: "Login portals", query: "site:example.com intitle:login OR inurl:login" }],
+          findings: [
+            {
+              id: "dork-one",
+              analyzer: "dork",
+              type: "dork",
+              title: "Login portals",
+              text: "site:example.com intitle:login OR inurl:login",
+              source: "google-dork",
+              severity: "low",
+              metadata: {}
+            }
+          ]
+        }
+      });
+    }
+
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/analyzers"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Build dorks" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("analyzer:dork:build", {
+      target: "example.com",
+      caseId: "case-one"
+    });
+  });
+  expect(await screen.findByText("site:example.com intitle:login OR inurl:login")).toBeInTheDocument();
+  expect(screen.getByText("dork / google-dork")).toBeInTheDocument();
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {

@@ -9,6 +9,7 @@ import path from "node:path";
 import type { ReacherDatabase } from "../../db/database.js";
 import { AgentsRepository } from "../../db/repositories/agents-repository.js";
 import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repository.js";
+import { AnalyzersRepository } from "../../db/repositories/analyzers-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
@@ -21,6 +22,7 @@ import type { VaultCrypto } from "../security/vault-crypto.js";
 import { searchConnectors } from "../search/connectors/index.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
 import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
+import { AnalyzersService } from "../analyzers/analyzers-service.js";
 import { ArchitectAgentService } from "../agents/architect-agent-service.js";
 import type { AgentRuntimeEvent } from "../../shared/schemas/agents-runtime.js";
 import type { ScanOutputEvent } from "../../shared/schemas/scans.js";
@@ -28,6 +30,7 @@ import type { ToolOutputEvent } from "../../shared/schemas/tools.js";
 import { createArchitectAgentHandlers } from "./handlers/architect-agent-handlers.js";
 import { createAgentRuntimeHandlers } from "./handlers/agent-runtime-handlers.js";
 import { createAgentsHandlers } from "./handlers/agents-handlers.js";
+import { createAnalyzersHandlers } from "./handlers/analyzers-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
@@ -56,6 +59,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const auditRepository = new AuditRepository(db);
   const agentsRepository = new AgentsRepository(db);
   const agentRuntimeRepository = new AgentRuntimeRepository(db);
+  const analyzersRepository = new AnalyzersRepository(db);
   const casesRepository = new CasesRepository(db);
   const reportsRepository = new ReportsRepository(db);
   const scansRepository = new ScansRepository(db);
@@ -95,6 +99,12 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     }
   };
   const scanService = new ScanService(scansRepository, toolsRepository, auditRepository, wslToolLauncher, emitScanOutput);
+  const analyzersService = new AnalyzersService(
+    analyzersRepository,
+    casesRepository,
+    auditRepository,
+    wslToolLauncher
+  );
   const architectAgentService = new ArchitectAgentService(
     agentsRepository,
     agentRuntimeRepository,
@@ -138,6 +148,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
     ...createArchitectAgentHandlers(architectAgentService),
     ...createToolsHandlers(toolsService),
+    ...createAnalyzersHandlers(analyzersService),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

@@ -32,6 +32,18 @@ import {
   agentStatesResponseSchema
 } from "./schemas/agents-runtime.js";
 import {
+  analyzerDorkBuildRequestSchema,
+  analyzerDorkBuildResponseSchema,
+  analyzerEvtxImportRequestSchema,
+  analyzerEvtxImportResponseSchema,
+  analyzerMacLookupRequestSchema,
+  analyzerMacLookupResponseSchema,
+  analyzerPcapImportRequestSchema,
+  analyzerPcapImportResponseSchema,
+  analyzerVulnLookupRequestSchema,
+  analyzerVulnLookupResponseSchema
+} from "./schemas/analyzers.js";
+import {
   caseAddItemRequestSchema,
   caseAddItemResponseSchema,
   caseSearchRequestSchema,
@@ -499,6 +511,46 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Builds deterministic topology for one persisted scan."
+  }),
+  "analyzer:evtx:import": defineChannel({
+    request: analyzerEvtxImportRequestSchema,
+    response: analyzerEvtxImportResponseSchema,
+    capability: "analyzers.evtx",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Imports a Windows event log through fixed wevtutil argv and saves parsed events."
+  }),
+  "analyzer:pcap:import": defineChannel({
+    request: analyzerPcapImportRequestSchema,
+    response: analyzerPcapImportResponseSchema,
+    capability: "analyzers.pcap",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Imports a packet capture file through tshark in WSL and saves conversations."
+  }),
+  "analyzer:dork:build": defineChannel({
+    request: analyzerDorkBuildRequestSchema,
+    response: analyzerDorkBuildResponseSchema,
+    capability: "analyzers.dork",
+    sensitivity: "low",
+    mutates: true,
+    summary: "Builds local Google dork query strings for a target."
+  }),
+  "analyzer:mac:lookup": defineChannel({
+    request: analyzerMacLookupRequestSchema,
+    response: analyzerMacLookupResponseSchema,
+    capability: "analyzers.mac",
+    sensitivity: "low",
+    mutates: true,
+    summary: "Looks up a MAC OUI offline with an optional public fallback."
+  }),
+  "analyzer:vuln:lookup": defineChannel({
+    request: analyzerVulnLookupRequestSchema,
+    response: analyzerVulnLookupResponseSchema,
+    capability: "analyzers.vulnerability",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Looks up product vulnerabilities through the cached NVD path."
   })
 } as const;
 

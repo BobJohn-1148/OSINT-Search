@@ -197,6 +197,54 @@ if (!preloadText.includes("scan:output")) {
   fail("preload is missing the allowed scan:output event bridge");
 }
 
+const analyzerServiceText = read(path.join(srcRoot, "main", "analyzers", "analyzers-service.ts"));
+for (const required of ["wevtutil.exe", "shell: false", "buildTsharkArgv", "parseEvtxXml", "parseTsharkJson", "fetchNvdVulnerabilities", "casesRepository.addItem", "auditRepository.record", "MAX_EVTX_CAPTURE_BYTES", "Process timed out and was canceled", "killWindowsProcessTree", ".pause()", ".resume()"]) {
+  if (!analyzerServiceText.includes(required)) {
+    fail(`analyzer service is missing ${required}`);
+  }
+}
+
+const pcapParserText = read(path.join(srcRoot, "main", "analyzers", "pcap-parser.ts"));
+for (const required of ["buildTsharkArgv", "\"tshark\"", "\"-r\"", "\"-T\"", "parseTsharkJson"]) {
+  if (!pcapParserText.includes(required)) {
+    fail(`PCAP parser is missing ${required}`);
+  }
+}
+
+if (pcapParserText.includes("\"-i\"") || pcapParserText.includes("dumpcap")) {
+  fail("PCAP analyzer exposes a live capture path");
+}
+
+const macLookupText = read(path.join(srcRoot, "main", "analyzers", "mac-lookup.ts"));
+const ouiText = read(path.join(srcRoot, "main", "analyzers", "oui-data.ts"));
+const generatedOuiText = read(path.join(srcRoot, "main", "analyzers", "oui-data.generated.ts"));
+if (!macLookupText.includes("offlineOuiVendors") || !ouiText.includes("offlineOuiVendors") || !generatedOuiText.includes("Generated IEEE OUI vendors")) {
+  fail("MAC analyzer is missing bundled offline OUI lookup");
+}
+
+if ((generatedOuiText.match(/": "/g) ?? []).length < 1000) {
+  fail("bundled OUI lookup table is too small to represent the IEEE offline database");
+}
+
+const vulnLookupText = read(path.join(srcRoot, "main", "analyzers", "vulnerability-lookup.ts"));
+if (!vulnLookupText.includes("NVD response missing vulnerabilities")) {
+  fail("vulnerability parser does not fail closed on invalid NVD responses");
+}
+
+const vulnRepositoryText = read(path.join(srcRoot, "db", "repositories", "analyzers-repository.ts"));
+for (const required of ["readVulnCache", "writeVulnCache", "vuln_cache"]) {
+  if (!vulnRepositoryText.includes(required)) {
+    fail(`analyzers repository is missing ${required}`);
+  }
+}
+
+const analyzerMigrationText = read(path.join(srcRoot, "db", "migrations", "013-analyzers.ts"));
+for (const required of ["evtx_imports", "pcap_imports", "vuln_cache", "STRICT"]) {
+  if (!analyzerMigrationText.includes(required)) {
+    fail(`analyzers migration is missing ${required}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -205,4 +253,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 8 security invariants hold");
+console.log("PASS: Phase 9 security invariants hold");

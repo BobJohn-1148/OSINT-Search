@@ -16,6 +16,7 @@ import { migration009AgentsRuntime } from "./009-agents-runtime.js";
 import { migration010ArchitectAgent } from "./010-architect-agent.js";
 import { migration011Tools } from "./011-tools.js";
 import { migration012Scans } from "./012-scans.js";
+import { migration013Analyzers } from "./013-analyzers.js";
 
 export interface Migration {
   readonly id: number;
@@ -35,5 +36,6 @@ export const migrations: readonly Migration[] = [
   migration009AgentsRuntime,
   migration010ArchitectAgent,
   migration011Tools,
-  migration012Scans
+  migration012Scans,
+  migration013Analyzers
 ];

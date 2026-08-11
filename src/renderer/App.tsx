@@ -8,6 +8,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { AgentsView } from "./components/agents-view";
+import { AnalyzersView } from "./components/analyzers-view";
 import { CasesView } from "./components/cases-view";
 import { ReportsView } from "./components/reports-view";
 import { NetworkScanView } from "./components/network-scan-view";
@@ -52,6 +53,8 @@ export function AppFrame() {
                   <ToolsView />
                 ) : route.id === "network-scan" ? (
                   <NetworkScanView />
+                ) : route.id === "analyzers" ? (
+                  <AnalyzersView />
                 ) : (
                   <RouteStub route={route} />
                 )

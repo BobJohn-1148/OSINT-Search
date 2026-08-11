@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 8;
+const MAX_PHASE = 9;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -262,6 +262,42 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("allows only approved target-neutral custom nmap flags", "custom argv safe allowlist");
   assertAnyTestIncludes("runs an authorized scan and captures parsed hosts", "authorized scan parses hosts");
   assertAnyTestIncludes("export includes the topology host table and service list", "scan export includes topology host table service list");
+} else if (requestedPhase === 9) {
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "wevtutil.exe", "EVTX fixed Windows import mechanism");
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "shell: false", "EVTX shell disabled mechanism");
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "MAX_EVTX_CAPTURE_BYTES", "EVTX bounded output mechanism");
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "Process timed out and was canceled", "EVTX timeout mechanism");
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "killWindowsProcessTree", "EVTX process-tree kill mechanism");
+  assertIncludes("src/main/analyzers/evtx-parser.ts", "parseEvtxXml", "EVTX parser mechanism");
+  assertIncludes("src/main/analyzers/evtx-parser.ts", "filterEvtxEvents", "EVTX event id filter mechanism");
+  assertIncludes("src/main/analyzers/pcap-parser.ts", "buildTsharkArgv", "PCAP tshark argv builder mechanism");
+  assertIncludes("src/main/analyzers/pcap-parser.ts", "\"-r\"", "PCAP file import argv mechanism");
+  assertIncludes("src/main/analyzers/pcap-parser.ts", "parseTsharkJson", "PCAP parser mechanism");
+  assertIncludes("src/main/analyzers/dork-builder.ts", "replaceAll(\"{target}\"", "local dork template mechanism");
+  assertIncludes("src/main/analyzers/oui-data.ts", "offlineOuiVendors", "bundled offline OUI mechanism");
+  assertIncludes("src/main/analyzers/oui-data.generated.ts", "Generated IEEE OUI vendors", "full generated OUI bundle mechanism");
+  assertIncludes("src/main/analyzers/mac-lookup.ts", "lookupMacVendor", "MAC vendor lookup mechanism");
+  assertIncludes("src/main/analyzers/vulnerability-lookup.ts", "fetchNvdVulnerabilities", "NVD product version lookup mechanism");
+  assertIncludes("src/main/analyzers/vulnerability-lookup.ts", "NVD response missing vulnerabilities", "NVD invalid response fail-closed mechanism");
+  assertIncludes("src/db/migrations/013-analyzers.ts", "vuln_cache", "vulnerability cache migration mechanism");
+  assertIncludes("src/db/repositories/analyzers-repository.ts", "readVulnCache", "CVE cache read mechanism");
+  assertIncludes("src/db/repositories/analyzers-repository.ts", "writeVulnCache", "CVE cache write mechanism");
+  assertIncludes("src/main/analyzers/analyzers-service.ts", "casesRepository.addItem", "analyzer save-to-case mechanism");
+  assertIncludes("src/main/ipc/handlers/analyzers-handlers.ts", "analyzer:evtx:import", "analyzer IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "analyzer:vuln:lookup", "analyzer IPC channel mechanism");
+  assertIncludes("src/renderer/components/analyzers-view.tsx", "Build dorks", "analyzers route surface mechanism");
+  assertIncludes("src/db/migrations/013-analyzers.ts", "evtx_imports", "EVTX import persistence");
+  assertIncludes("src/db/migrations/013-analyzers.ts", "pcap_imports", "PCAP import persistence");
+  assertAnyTestIncludes("evtx parser reads a fixture and filters by event id", "EVTX parser fixture filters by event id");
+  assertAnyTestIncludes("EVTX fixed process caps output and times out with a process-tree kill", "EVTX bounded process execution");
+  assertAnyTestIncludes("pcap parser reads a fixture and never exposes a live capture argv", "PCAP parser fixture and no live capture argv");
+  assertAnyTestIncludes("dork builder creates expected queries locally", "dork expected queries");
+  assertAnyTestIncludes("MAC lookup resolves an offline vendor", "MAC offline resolves");
+  assertAnyTestIncludes("product and version map to a CVE list from mocked NVD data", "product version maps to CVEs");
+  assertAnyTestIncludes("analyzers import parse and save findings to a case", "each analyzer imports parses and saves");
+  assertAnyTestIncludes("vulnerability lookup caches NVD responses", "vulnerability cache behavior");
+  assertAnyTestIncludes("vulnerability lookup rejects invalid NVD responses without caching them", "NVD failure does not cache empty results");
+  assertAnyTestIncludes("analyzers route builds dorks and saves findings through IPC", "analyzers route behavior");
 }
 
 if (process.exitCode) {

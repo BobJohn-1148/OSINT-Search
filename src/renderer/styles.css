@@ -523,6 +523,44 @@ select {
   grid-column: 1 / -1;
 }
 
+.analyzers-command-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 360px) minmax(0, 1fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.analyzers-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.analyzers-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.analyzers-two-column {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.analyzer-result-row {
+  display: grid;
+  gap: 6px;
+  min-height: 54px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
+.analyzer-result-row strong {
+  overflow-wrap: anywhere;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -815,6 +853,9 @@ select {
   .tools-command-grid,
   .tools-selected-row,
   .tools-edit-row,
+  .analyzers-command-row,
+  .analyzers-layout,
+  .analyzers-two-column,
   .scan-layout,
   .scan-command-grid,
   .scan-toggle-grid,
