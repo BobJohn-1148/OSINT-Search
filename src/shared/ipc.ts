@@ -12,6 +12,24 @@ import {
   agentsSetModelResponseSchema
 } from "./schemas/agents.js";
 import {
+  caseAddItemRequestSchema,
+  caseAddItemResponseSchema,
+  caseSearchRequestSchema,
+  caseSearchResponseSchema,
+  caseSummaryRequestSchema,
+  caseSummaryResponseSchema,
+  caseTimelineRequestSchema,
+  caseTimelineResponseSchema,
+  casesCreateRequestSchema,
+  casesCreateResponseSchema,
+  casesGetRequestSchema,
+  casesGetResponseSchema,
+  casesListRequestSchema,
+  casesListResponseSchema,
+  casesUpdateRequestSchema,
+  casesUpdateResponseSchema
+} from "./schemas/cases.js";
+import {
   auditListRequestSchema,
   auditListResponseSchema
 } from "./schemas/audit.js";
@@ -197,6 +215,70 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Cancels one active passive OSINT search run."
+  }),
+  "cases:create": defineChannel({
+    request: casesCreateRequestSchema,
+    response: casesCreateResponseSchema,
+    capability: "cases.write",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Creates a local investigation case."
+  }),
+  "cases:list": defineChannel({
+    request: casesListRequestSchema,
+    response: casesListResponseSchema,
+    capability: "cases.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists local investigation cases."
+  }),
+  "cases:get": defineChannel({
+    request: casesGetRequestSchema,
+    response: casesGetResponseSchema,
+    capability: "cases.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Reads one case with its saved evidence."
+  }),
+  "cases:update": defineChannel({
+    request: casesUpdateRequestSchema,
+    response: casesUpdateResponseSchema,
+    capability: "cases.write",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Updates case metadata, status, or tags."
+  }),
+  "case:addItem": defineChannel({
+    request: caseAddItemRequestSchema,
+    response: caseAddItemResponseSchema,
+    capability: "cases.writeEvidence",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Saves one evidence item to a case."
+  }),
+  "case:timeline": defineChannel({
+    request: caseTimelineRequestSchema,
+    response: caseTimelineResponseSchema,
+    capability: "cases.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists case evidence in chronological order."
+  }),
+  "case:summary": defineChannel({
+    request: caseSummaryRequestSchema,
+    response: caseSummaryResponseSchema,
+    capability: "cases.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Computes case evidence counts and key entities."
+  }),
+  "case:search": defineChannel({
+    request: caseSearchRequestSchema,
+    response: caseSearchResponseSchema,
+    capability: "cases.search",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Full-text searches saved evidence within a case."
   })
 } as const;
 

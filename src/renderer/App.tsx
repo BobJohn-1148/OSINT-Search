@@ -7,6 +7,7 @@
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
+import { CasesView } from "./components/cases-view";
 import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
 import { SearchView } from "./components/search-view";
@@ -32,7 +33,17 @@ export function AppFrame() {
             <Route
               key={route.id}
               path={route.path}
-              element={route.id === "settings" ? <SettingsView /> : route.id === "search" ? <SearchView /> : <RouteStub route={route} />}
+              element={
+                route.id === "settings" ? (
+                  <SettingsView />
+                ) : route.id === "search" ? (
+                  <SearchView />
+                ) : route.id === "cases" ? (
+                  <CasesView />
+                ) : (
+                  <RouteStub route={route} />
+                )
+              }
             />
           ))}
           <Route path={fallbackRoute.path} element={<RouteStub route={fallbackRoute} />} />

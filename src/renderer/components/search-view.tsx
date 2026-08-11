@@ -6,6 +6,7 @@
 import { GitBranch, Play, Save, Search as SearchIcon, Square } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
+import type { CaseRecord } from "../../shared/schemas/cases";
 import type { Observation, SearchRunResult, SearchSeed, SearchTreeNode, SeedType, SourceStatus } from "../../shared/types/search";
 import { seedTypeValues } from "../../shared/types/search";
 import { useReacherClient } from "../hooks/use-reacher-client";
@@ -72,6 +73,52 @@ export function SearchView() {
     const result = await invoke("search:cancel", { runId: activeRunId });
     setStatus(result.ok && result.value.cancelled ? "Search cancelled" : "No active search to cancel");
     setActiveRunId(null);
+  }
+
+  async function saveSelectedNode(): Promise<void> {
+    if (!selectedNode) {
+      return;
+    }
+    const targetCase = await ensureCase();
+    if (!targetCase) {
+      return;
+    }
+    const result = await invoke("case:addItem", {
+      caseId: targetCase.id,
+      itemType: "observation",
+      refId: selectedNode.observationId ?? selectedNode.id,
+      title: selectedNode.label,
+      text: selectedNode.label,
+      metadata: {
+        entity: selectedNode.entity ?? selectedNode.label,
+        strength: selectedNode.strength ?? 1,
+        band: selectedNode.band ?? "single-source",
+        sourceId: selectedNode.sourceId
+      }
+    });
+    setStatus(result.ok ? `Saved to ${targetCase.title}` : result.error.message);
+  }
+
+  async function ensureCase(): Promise<CaseRecord | null> {
+    const listResult = await invoke("cases:list", {});
+    if (!listResult.ok) {
+      setStatus(listResult.error.message);
+      return null;
+    }
+    const existingOpenCase = listResult.value.cases.find((item) => item.status === "open") ?? null;
+    if (existingOpenCase) {
+      return existingOpenCase;
+    }
+    if (listResult.value.cases.length > 0) {
+      const firstCase = listResult.value.cases[0];
+      return firstCase;
+    }
+    const createResult = await invoke("cases:create", { title: "Quick evidence", tags: ["search"] });
+    if (!createResult.ok) {
+      setStatus(createResult.error.message);
+      return null;
+    }
+    return createResult.value.case;
   }
 
   return (
@@ -179,7 +226,7 @@ export function SearchView() {
               <p className="console-line">{selectedNode.label}</p>
               <p className="status-text">Trace: {selectedNode.sourceId ?? selectedNode.kind}</p>
               <div className="action-row">
-                <button className="action-button" type="button">
+                <button className="action-button" type="button" onClick={() => void saveSelectedNode()}>
                   <Save size={16} aria-hidden="true" />
                   Save node
                 </button>

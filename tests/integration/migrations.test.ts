@@ -26,7 +26,8 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 3, name: "agents" },
     { id: 4, name: "sources" },
     { id: 5, name: "observations" },
-    { id: 6, name: "search-runs" }
+    { id: 6, name: "search-runs" },
+    { id: 7, name: "cases" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -35,6 +36,8 @@ it("migration runner applies migrations and is idempotent on second run", () => 
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sources'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'observations'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'search_runs'").get()).toBeTruthy();
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'cases'").get()).toBeTruthy();
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'case_items'").get()).toBeTruthy();
 });
 
 it("an audit_events row cannot be updated or deleted because history is append-only", () => {

@@ -305,6 +305,49 @@ input {
   gap: 12px;
 }
 
+.case-command-row,
+.case-search-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.cases-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) minmax(220px, 320px);
+  gap: 18px;
+}
+
+.case-list-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.case-list-button:hover,
+.timeline-item:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.timeline-item {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
 .search-layout {
   display: grid;
   grid-template-columns: minmax(220px, 320px) minmax(0, 1.2fr) minmax(240px, 0.8fr);
@@ -391,6 +434,9 @@ input {
   .settings-grid,
   .search-command-row,
   .search-layout,
+  .case-command-row,
+  .case-search-row,
+  .cases-layout,
   .field-grid,
   .agent-row {
     grid-template-columns: 1fr;

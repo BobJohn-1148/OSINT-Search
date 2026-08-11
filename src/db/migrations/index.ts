@@ -10,6 +10,7 @@ import { migration003Agents } from "./003-agents.js";
 import { migration004Sources } from "./004-sources.js";
 import { migration005Observations } from "./005-observations.js";
 import { migration006SearchRuns } from "./006-search-runs.js";
+import { migration007Cases } from "./007-cases.js";
 
 export interface Migration {
   readonly id: number;
@@ -23,5 +24,6 @@ export const migrations: readonly Migration[] = [
   migration003Agents,
   migration004Sources,
   migration005Observations,
-  migration006SearchRuns
+  migration006SearchRuns,
+  migration007Cases
 ];

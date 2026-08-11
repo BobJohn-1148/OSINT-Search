@@ -7,6 +7,7 @@ import { BrowserWindow, ipcMain } from "electron";
 import type { ReacherDatabase } from "../../db/database.js";
 import { AgentsRepository } from "../../db/repositories/agents-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
+import { CasesRepository } from "../../db/repositories/cases-repository.js";
 import { SettingsRepository } from "../../db/repositories/settings-repository.js";
 import { VaultRepository } from "../../db/repositories/vault-repository.js";
 import { SearchRepository } from "../../db/repositories/search-repository.js";
@@ -15,6 +16,7 @@ import { searchConnectors } from "../search/connectors/index.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
 import { createAgentsHandlers } from "./handlers/agents-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
+import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createSearchHandlers } from "./handlers/search-handlers.js";
@@ -31,6 +33,7 @@ type HandlerMap = {
 export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypto): void {
   const auditRepository = new AuditRepository(db);
   const agentsRepository = new AgentsRepository(db);
+  const casesRepository = new CasesRepository(db);
   const searchRepository = new SearchRepository(db);
   const settingsRepository = new SettingsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
@@ -38,6 +41,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createSystemHandlers(auditRepository),
     ...createSettingsHandlers(settingsRepository),
     ...createAuditHandlers(auditRepository),
+    ...createCasesHandlers(casesRepository),
     ...createKeysHandlers(vaultRepository, auditRepository),
     ...createProvidersHandlers(vaultRepository),
     ...createAgentsHandlers(agentsRepository),

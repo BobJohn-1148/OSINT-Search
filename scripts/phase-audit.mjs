@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 2;
+const MAX_PHASE = 3;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -107,6 +107,21 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/main/search/source-connector.ts", "SourceConnector", "connector interface documented");
   assertIncludes("src/main/search/connectors/index.ts", "searchConnectors", "passive connector registry");
   assertIncludes("src/renderer/components/search-view.tsx", "Search this further", "pivot UI mechanism");
+} else if (requestedPhase === 3) {
+  assertIncludes("src/db/repositories/cases-repository.ts", "addItem", "case save mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "case:addItem", "save from search mechanism");
+  assertAnyTestIncludes("saves a search observation to a case", "create case and save from search");
+  assertAnyTestIncludes("search route saves a selected tree node to a case", "search route save-to-case behavior");
+
+  assertIncludes("src/db/repositories/cases-repository.ts", "ORDER BY source_ts ASC", "ordered timeline mechanism");
+  assertAnyTestIncludes("timeline is ordered by time", "ordered timeline");
+  assertAnyTestIncludes("cases route renders timeline items", "timeline renders");
+
+  assertIncludes("src/db/repositories/cases-repository.ts", "summary", "summary mechanism");
+  assertAnyTestIncludes("summary aggregates key entities by strength", "summary computes");
+
+  assertIncludes("src/db/migrations/007-cases.ts", "fts5", "FTS mechanism");
+  assertAnyTestIncludes("FTS finds a saved value by substring", "FTS works");
 }
 
 if (process.exitCode) {
