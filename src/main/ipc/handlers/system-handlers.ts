@@ -4,9 +4,15 @@
  * no working example for sensitive-action logging.
  */
 import type { AuditRepository } from "../../../db/repositories/audit-repository.js";
-import type { SystemPingRequest, SystemPingResponse } from "../../../shared/schemas/system.js";
+import type {
+  SystemPickImageResponse,
+  SystemPingRequest,
+  SystemPingResponse
+} from "../../../shared/schemas/system.js";
 
-export function createSystemHandlers(auditRepository: AuditRepository) {
+export type PickImageDialog = () => Promise<string | null>;
+
+export function createSystemHandlers(auditRepository: AuditRepository, pickImageDialog: PickImageDialog = () => Promise.resolve(null)) {
   return {
     "system:ping": (request: SystemPingRequest): SystemPingResponse => {
       auditRepository.record({
@@ -19,6 +25,9 @@ export function createSystemHandlers(auditRepository: AuditRepository) {
       });
 
       return { pong: true, nonce: request.nonce, audited: true };
-    }
+    },
+    "system:pickImage": async (): Promise<SystemPickImageResponse> => ({
+      imagePath: await pickImageDialog()
+    })
   };
 }

@@ -3,7 +3,7 @@
  * of ranked links. If source arrivals were hidden until completion, the user
  * could not see which passive sources corroborated or failed during fan-out.
  */
-import { Bot, GitBranch, Play, Save, Search as SearchIcon, Square } from "lucide-react";
+import { Bot, FolderOpen, GitBranch, Image as ImageIcon, Play, Save, Search as SearchIcon, Square, Users } from "lucide-react";
 import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { CaseRecord } from "../../shared/schemas/cases";
@@ -15,6 +15,9 @@ export function SearchView() {
   const { invoke } = useReacherClient();
   const [seedType, setSeedType] = useState<SeedType>("domain");
   const [seedValue, setSeedValue] = useState("example.com");
+  const [imagePath, setImagePath] = useState("C:\\images\\subject.png");
+  const [username, setUsername] = useState("jdoe");
+  const [wslDistro, setWslDistro] = useState("Ubuntu");
   const [run, setRun] = useState<SearchRunResult | null>(null);
   const [arrivals, setArrivals] = useState<SourceStatus[]>([]);
   const [liveObservations, setLiveObservations] = useState<Observation[]>([]);
@@ -73,6 +76,47 @@ export function SearchView() {
     const result = await invoke("search:cancel", { runId: activeRunId });
     setStatus(result.ok && result.value.cancelled ? "Search cancelled" : "No active search to cancel");
     setActiveRunId(null);
+  }
+
+  async function searchImage(): Promise<void> {
+    const targetCase = await ensureCase();
+    const result = await invoke("search:image", { imagePath, caseId: targetCase?.id });
+    if (!result.ok) {
+      setStatus(result.error.message);
+      return;
+    }
+    setRun(result.value.run);
+    setSelectedNode(null);
+    setStatus(result.value.usedBrowserFallback ? "Image search used browser fallback" : "Image search complete");
+  }
+
+  async function pickImage(): Promise<void> {
+    const result = await invoke("system:pickImage", {});
+    if (!result.ok) {
+      setStatus(result.error.message);
+      return;
+    }
+    if (result.value.imagePath) {
+      setImagePath(result.value.imagePath);
+      setStatus("Image selected");
+    }
+  }
+
+  async function usernameSweep(): Promise<void> {
+    const targetCase = await ensureCase();
+    const result = await invoke("search:usernameSweep", {
+      username,
+      wslDistro,
+      caseId: targetCase?.id,
+      sendToAgent: true
+    });
+    if (!result.ok) {
+      setStatus(result.error.message);
+      return;
+    }
+    setRun(result.value.run);
+    setSelectedNode(null);
+    setStatus(`Username sweep complete; saved:${result.value.savedItems}`);
   }
 
   async function saveSelectedNode(): Promise<void> {
@@ -173,6 +217,33 @@ export function SearchView() {
         <button className="action-button" type="button" disabled={!activeRunId} onClick={() => void cancelSearch()}>
           <Square size={16} aria-hidden="true" />
           Cancel
+        </button>
+      </div>
+
+      <div className="search-depth-row">
+        <label className="compact-field">
+          Image path
+          <input className="field-control" value={imagePath} onChange={(event) => setImagePath(event.target.value)} />
+        </label>
+        <button className="action-button" type="button" onClick={() => void pickImage()}>
+          <FolderOpen size={16} aria-hidden="true" />
+          Browse image
+        </button>
+        <button className="action-button" type="button" onClick={() => void searchImage()}>
+          <ImageIcon size={16} aria-hidden="true" />
+          Search image
+        </button>
+        <label className="compact-field">
+          Username
+          <input className="field-control" value={username} onChange={(event) => setUsername(event.target.value)} />
+        </label>
+        <label className="compact-field">
+          WSL distro
+          <input className="field-control" value={wslDistro} onChange={(event) => setWslDistro(event.target.value)} />
+        </label>
+        <button className="action-button" type="button" onClick={() => void usernameSweep()}>
+          <Users size={16} aria-hidden="true" />
+          Username sweep
         </button>
       </div>
 

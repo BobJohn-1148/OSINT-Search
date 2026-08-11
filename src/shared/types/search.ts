@@ -4,7 +4,7 @@
  * loose link lists, the scoring engine could not prove which sources corroborate
  * a claim.
  */
-export const seedTypeValues = ["email", "ip", "phone", "username", "domain", "business", "mac"] as const;
+export const seedTypeValues = ["email", "ip", "phone", "username", "domain", "business", "mac", "image"] as const;
 export const sourceTierValues = ["passive", "active"] as const;
 export const sourceCategoryValues = [
   "identity",

@@ -12,7 +12,7 @@ import {
 import { seedTypeValues } from "../types/search.js";
 
 export const agentSeedSchema = z.object({
-  type: z.enum([...seedTypeValues, "image"] as const),
+  type: z.enum(seedTypeValues),
   value: z.string().min(1)
 });
 

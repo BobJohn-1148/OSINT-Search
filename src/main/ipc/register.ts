@@ -12,6 +12,7 @@ import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repo
 import { AnalyzersRepository } from "../../db/repositories/analyzers-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
+import { ImageSearchRepository } from "../../db/repositories/image-search-repository.js";
 import { MonitoringRepository } from "../../db/repositories/monitoring-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
 import { ScansRepository } from "../../db/repositories/scans-repository.js";
@@ -35,6 +36,7 @@ import { createAnalyzersHandlers } from "./handlers/analyzers-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
+import { createImageUsernameHandlers } from "./handlers/image-username-handlers.js";
 import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createReportsHandlers } from "./handlers/reports-handlers.js";
@@ -50,6 +52,7 @@ import { ReportService } from "../reports/report-service.js";
 import { ScanService } from "../scans/scan-service.js";
 import { ToolsService } from "../tools/tools-service.js";
 import { WslToolLauncher } from "../tools/wsl-launcher.js";
+import { ImageUsernameService } from "../image-username/image-username-service.js";
 import { MonitoringService } from "../monitoring/monitoring-service.js";
 
 type HandlerMap = {
@@ -64,6 +67,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const agentRuntimeRepository = new AgentRuntimeRepository(db);
   const analyzersRepository = new AnalyzersRepository(db);
   const casesRepository = new CasesRepository(db);
+  const imageSearchRepository = new ImageSearchRepository(db);
   const monitoringRepository = new MonitoringRepository(db);
   const reportsRepository = new ReportsRepository(db);
   const scansRepository = new ScansRepository(db);
@@ -117,6 +121,15 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     auditRepository,
     wslToolLauncher
   );
+  const imageUsernameService = new ImageUsernameService(
+    imageSearchRepository,
+    searchRepository,
+    casesRepository,
+    auditRepository,
+    vaultRepository,
+    wslToolLauncher,
+    agentRuntimeService
+  );
   const architectAgentService = new ArchitectAgentService(
     agentsRepository,
     agentRuntimeRepository,
@@ -148,7 +161,19 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     path.join(app.getPath("userData"), "reports")
   );
   const handlers: HandlerMap = {
-    ...createSystemHandlers(auditRepository),
+    ...createSystemHandlers(auditRepository, async () => {
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      const result = focusedWindow
+        ? await dialog.showOpenDialog(focusedWindow, {
+            properties: ["openFile"],
+            filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }]
+          })
+        : await dialog.showOpenDialog({
+            properties: ["openFile"],
+            filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp"] }]
+          });
+      return result.canceled ? null : result.filePaths[0] ?? null;
+    }),
     ...createSettingsHandlers(settingsRepository),
     ...createAuditHandlers(auditRepository),
     ...createCasesHandlers(casesRepository),
@@ -162,6 +187,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createToolsHandlers(toolsService),
     ...createAnalyzersHandlers(analyzersService),
     ...createMonitoringHandlers(monitoringService),
+    ...createImageUsernameHandlers(imageUsernameService),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

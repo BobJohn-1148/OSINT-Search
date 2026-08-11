@@ -145,6 +145,32 @@ function createDefaultInvokeMock() {
     if (channel === "analyzer:vuln:lookup") {
       return Promise.resolve({ ok: true as const, value: { vulnerabilities: [], findings: [], cached: false } });
     }
+    if (channel === "system:pickImage") {
+      return Promise.resolve({ ok: true as const, value: { imagePath: "C:\\images\\picked.png" } });
+    }
+    if (channel === "search:image") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: minimalRun("image-run", { type: "image", value: "C:\\images\\subject.png" }, "Matching profile photo"),
+          records: [],
+          savedItems: 1,
+          usedBrowserFallback: true,
+          browserLaunches: []
+        }
+      });
+    }
+    if (channel === "search:usernameSweep") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: minimalRun("username-run", { type: "username", value: "jdoe" }, "GitHub"),
+          savedItems: 2,
+          toolRunIds: ["maigret:jdoe", "blackbird:jdoe"],
+          agentRunId: null
+        }
+      });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -160,6 +186,7 @@ beforeEach(() => {
     value: {
       channels: [
         "system:ping",
+        "system:pickImage",
         "keys:list",
         "providers:list",
         "agents:list",
@@ -171,6 +198,8 @@ beforeEach(() => {
         "settings:get",
         "settings:set",
         "search:run",
+        "search:image",
+        "search:usernameSweep",
         "cases:list",
         "cases:create",
         "case:addItem",
@@ -819,6 +848,34 @@ it("dashboard adds a watch target and checks exposure alerts so credential monit
   expect(await screen.findByText("1 new exposures saved:1")).toBeInTheDocument();
 });
 
+it("search route runs image and username depth so Phase 11 pivots enter the correlation tree", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Browse image" }));
+  await user.click(screen.getByRole("button", { name: "Search image" }));
+  await user.click(screen.getByRole("button", { name: "Username sweep" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("search:image", {
+      imagePath: "C:\\images\\picked.png",
+      caseId: undefined
+    });
+  });
+  expect(invokeMock).toHaveBeenCalledWith("search:usernameSweep", {
+    username: "jdoe",
+    wslDistro: "Ubuntu",
+    caseId: undefined,
+    sendToAgent: true
+  });
+  expect(await screen.findByText("Username sweep complete; saved:2")).toBeInTheDocument();
+});
+
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {
   const rendererRoot = path.join(process.cwd(), "src", "renderer");
   const files = collectRendererFiles(rendererRoot);
@@ -831,6 +888,45 @@ it("no hex literals in renderer so visual color resolves through theme tokens", 
   expect(source).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   expect(nonThemeSource).not.toMatch(/\b(?:rgb|rgba|hsl|hsla|oklch|lab|lch)\(/i);
 });
+
+function minimalRun(runId: string, seed: { readonly type: string; readonly value: string }, value: string) {
+  return {
+    runId,
+    seed,
+    startedTs: "2026-08-10T10:00:00.000Z",
+    completedTs: "2026-08-10T10:00:01.000Z",
+    statuses: [{ sourceId: "phase11", label: "Phase 11", status: "returned", observationCount: 1 }],
+    observations: [
+      {
+        id: `${runId}:obs`,
+        runId,
+        entity: value,
+        type: "phase11",
+        value,
+        source: "phase11",
+        confidence: 1,
+        raw: {}
+      }
+    ],
+    entities: [
+      {
+        entity: value,
+        type: "phase11",
+        value,
+        sourceIds: ["phase11"],
+        strength: 1,
+        band: "single-source"
+      }
+    ],
+    tree: {
+      id: `run:${runId}`,
+      label: `${seed.type}:${seed.value}`,
+      kind: "root",
+      saveable: true,
+      children: []
+    }
+  };
+}
 
 function collectRendererFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

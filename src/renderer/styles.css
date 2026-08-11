@@ -316,6 +316,13 @@ select {
   gap: 12px;
 }
 
+.search-depth-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto minmax(160px, 0.7fr) minmax(120px, 180px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
 .case-command-row,
 .case-search-row {
   display: grid;
@@ -896,6 +903,7 @@ select {
 
   .settings-grid,
   .search-command-row,
+  .search-depth-row,
   .search-layout,
   .tools-layout,
   .tools-command-grid,

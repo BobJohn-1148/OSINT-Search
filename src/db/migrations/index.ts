@@ -18,6 +18,7 @@ import { migration011Tools } from "./011-tools.js";
 import { migration012Scans } from "./012-scans.js";
 import { migration013Analyzers } from "./013-analyzers.js";
 import { migration014Monitoring } from "./014-monitoring.js";
+import { migration015ImageUsername } from "./015-image-username.js";
 
 export interface Migration {
   readonly id: number;
@@ -39,5 +40,6 @@ export const migrations: readonly Migration[] = [
   migration011Tools,
   migration012Scans,
   migration013Analyzers,
-  migration014Monitoring
+  migration014Monitoring,
+  migration015ImageUsername
 ];

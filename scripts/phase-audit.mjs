@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 10;
+const MAX_PHASE = 11;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -324,6 +324,31 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("paid source with no key is skipped without error", "paid source degrades gracefully");
   assertAnyTestIncludes("removing a watch preserves exposure alerts", "exposure alerts append-only history");
   assertAnyTestIncludes("dashboard adds a watch target and checks exposure alerts", "dashboard monitoring surface");
+} else if (requestedPhase === 11) {
+  assertIncludes("src/shared/types/search.ts", "\"image\"", "image seed type mechanism");
+  assertIncludes("src/db/migrations/015-image-username.ts", "image_searches", "image search migration mechanism");
+  assertIncludes("src/db/repositories/image-search-repository.ts", "ImageSearchRepository", "image search repository mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "browserImageSearch", "browser fallback seam mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "https://lens.google.com", "Google Lens browser fallback mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "https://yandex.com/images/search", "Yandex browser fallback mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "openweb-ninja", "optional OpenWeb Ninja key path");
+  assertIncludes("src/main/image-username/image-username-service.ts", "bright-data", "optional Bright Data key path");
+  assertIncludes("src/main/image-username/image-username-service.ts", "[\"maigret\", request.username, \"--json\", \"-\"]", "Maigret fixed argv mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "[\"blackbird\", \"-u\", request.username, \"--json\"]", "Blackbird fixed argv mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "agentRuntimeService.run", "OSINT agent username handoff mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "searchRepository.saveRun", "image username correlation persistence mechanism");
+  assertIncludes("src/main/image-username/image-username-service.ts", "casesRepository.addItem", "image username save-to-case mechanism");
+  assertIncludes("src/main/ipc/handlers/image-username-handlers.ts", "search:image", "image search IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "search:usernameSweep", "username sweep IPC channel mechanism");
+  assertIncludes("src/shared/ipc.ts", "system:pickImage", "main-process image upload picker channel");
+  assertIncludes("src/renderer/components/search-view.tsx", "Search image", "image search UI mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "Browse image", "image upload picker UI mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "Username sweep", "username sweep UI mechanism");
+  assertAnyTestIncludes("adds image results as observations", "image results into tree and case");
+  assertAnyTestIncludes("with no image API key the browser path is used without crashing", "browser fallback no key");
+  assertAnyTestIncludes("Browse image", "image upload picker route behavior");
+  assertAnyTestIncludes("username sweep corroborates the same account across sources", "username corroboration across sources");
+  assertAnyTestIncludes("search route runs image and username depth", "image username route behavior");
 }
 
 if (process.exitCode) {

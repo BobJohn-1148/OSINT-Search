@@ -266,6 +266,24 @@ for (const required of ["watchlist", "exposures", "monitoring_alerts", "STRICT",
   }
 }
 
+const imageUsernameText = read(path.join(srcRoot, "main", "image-username", "image-username-service.ts"));
+for (const required of ["browserImageSearch", "https://lens.google.com", "https://yandex.com/images/search", "vaultRepository.has", "vaultRepository.readSecret", "openweb-ninja", "bright-data", "[\"maigret\", request.username, \"--json\", \"-\"]", "[\"blackbird\", \"-u\", request.username, \"--json\"]", "agentRuntimeService.run", "searchRepository.saveRun", "casesRepository.addItem", "auditRepository.record"]) {
+  if (!imageUsernameText.includes(required)) {
+    fail(`image username service is missing ${required}`);
+  }
+}
+
+if (!ipcText.includes("system:pickImage")) {
+  fail("IPC registry is missing main-process image picker channel");
+}
+
+const imageMigrationText = read(path.join(srcRoot, "db", "migrations", "015-image-username.ts"));
+for (const required of ["image_searches", "STRICT"]) {
+  if (!imageMigrationText.includes(required)) {
+    fail(`image username migration is missing ${required}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -274,4 +292,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 10 security invariants hold");
+console.log("PASS: Phase 11 security invariants hold");

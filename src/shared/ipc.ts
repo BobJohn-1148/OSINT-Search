@@ -76,6 +76,12 @@ import {
   keysTestResponseSchema
 } from "./schemas/keys.js";
 import {
+  searchImageRequestSchema,
+  searchImageResponseSchema,
+  usernameSweepRequestSchema,
+  usernameSweepResponseSchema
+} from "./schemas/image-username.js";
+import {
   watchAddRequestSchema,
   watchAddResponseSchema,
   watchCheckNowRequestSchema,
@@ -126,6 +132,8 @@ import {
   settingsSetResponseSchema
 } from "./schemas/settings.js";
 import {
+  systemPickImageRequestSchema,
+  systemPickImageResponseSchema,
   systemPingRequestSchema,
   systemPingResponseSchema
 } from "./schemas/system.js";
@@ -171,6 +179,14 @@ export const IPC = {
     sensitivity: "low",
     mutates: true,
     summary: "Records a local app heartbeat and returns a pong."
+  }),
+  "system:pickImage": defineChannel({
+    request: systemPickImageRequestSchema,
+    response: systemPickImageResponseSchema,
+    capability: "system.filePicker",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Opens a main-process file picker for one local image upload."
   }),
   "settings:get": defineChannel({
     request: settingsGetRequestSchema,
@@ -603,6 +619,22 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists stored breach exposures for all or one watch target."
+  }),
+  "search:image": defineChannel({
+    request: searchImageRequestSchema,
+    response: searchImageResponseSchema,
+    capability: "search.image",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs reverse-image lookup and persists results into the correlation tree."
+  }),
+  "search:usernameSweep": defineChannel({
+    request: usernameSweepRequestSchema,
+    response: usernameSweepResponseSchema,
+    capability: "search.usernameDepth",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs Maigret and Blackbird username depth through WSL and persists corroborated results."
   })
 } as const;
 

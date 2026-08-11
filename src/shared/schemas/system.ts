@@ -16,5 +16,11 @@ export const systemPingResponseSchema = z.object({
   audited: z.literal(true)
 });
 
+export const systemPickImageRequestSchema = z.object({});
+export const systemPickImageResponseSchema = z.object({
+  imagePath: z.string().min(1).nullable()
+});
+
 export type SystemPingRequest = z.infer<typeof systemPingRequestSchema>;
 export type SystemPingResponse = z.infer<typeof systemPingResponseSchema>;
+export type SystemPickImageResponse = z.infer<typeof systemPickImageResponseSchema>;
