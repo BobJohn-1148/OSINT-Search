@@ -37,6 +37,22 @@ function createDefaultInvokeMock() {
     if (channel === "agent:playbooks") {
       return Promise.resolve({ ok: true as const, value: { playbooks: [] } });
     }
+    if (channel === "dashboard:summary") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          activeCases: [],
+          recentSearches: [],
+          recentAgentRuns: [],
+          agentStatus: { working: 0, idle: 0, offline: 0, error: 0, states: [] },
+          watchAlerts: [],
+          recentAudit: []
+        }
+      });
+    }
+    if (channel === "audit:query") {
+      return Promise.resolve({ ok: true as const, value: { events: [] } });
+    }
     if (channel === "settings:get") {
       return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "false" } });
     }
@@ -187,6 +203,8 @@ beforeEach(() => {
       channels: [
         "system:ping",
         "system:pickImage",
+        "dashboard:summary",
+        "audit:query",
         "keys:list",
         "providers:list",
         "agents:list",
@@ -265,6 +283,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Run scan" })).toBeInTheDocument();
     } else if (route.id === "analyzers") {
       expect(screen.getByRole("button", { name: "Build dorks" })).toBeInTheDocument();
+    } else if (route.id === "audit-log") {
+      expect(screen.getByRole("button", { name: "Apply filters" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -656,6 +676,28 @@ it("network scan route renders topology nodes from scan results so parsed hosts 
 it("analyzers route builds dorks and saves findings through IPC so query generation stays main-owned", async () => {
   const user = userEvent.setup();
   invokeMock.mockImplementation((channel: string) => {
+    if (channel === "dashboard:summary") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          activeCases: [
+            {
+              id: "case-one",
+              title: "Credential case",
+              status: "open",
+              createdTs: "2026-08-10T10:00:00.000Z",
+              updatedTs: "2026-08-10T10:00:00.000Z",
+              tags: []
+            }
+          ],
+          recentSearches: [],
+          recentAgentRuns: [],
+          agentStatus: { working: 0, idle: 0, offline: 0, error: 0, states: [] },
+          watchAlerts: [],
+          recentAudit: []
+        }
+      });
+    }
     if (channel === "cases:list") {
       return Promise.resolve({
         ok: true as const,
@@ -718,6 +760,28 @@ it("analyzers route builds dorks and saves findings through IPC so query generat
 it("dashboard adds a watch target and checks exposure alerts so credential monitoring is reachable", async () => {
   const user = userEvent.setup();
   invokeMock.mockImplementation((channel: string) => {
+    if (channel === "dashboard:summary") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          activeCases: [
+            {
+              id: "case-one",
+              title: "Credential case",
+              status: "open",
+              createdTs: "2026-08-10T10:00:00.000Z",
+              updatedTs: "2026-08-10T10:00:00.000Z",
+              tags: []
+            }
+          ],
+          recentSearches: [],
+          recentAgentRuns: [],
+          agentStatus: { working: 0, idle: 0, offline: 0, error: 0, states: [] },
+          watchAlerts: [],
+          recentAudit: []
+        }
+      });
+    }
     if (channel === "cases:list") {
       return Promise.resolve({
         ok: true as const,

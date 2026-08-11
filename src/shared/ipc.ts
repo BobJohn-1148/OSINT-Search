@@ -63,8 +63,14 @@ import {
 } from "./schemas/cases.js";
 import {
   auditListRequestSchema,
-  auditListResponseSchema
+  auditListResponseSchema,
+  auditQueryRequestSchema,
+  auditQueryResponseSchema
 } from "./schemas/audit.js";
+import {
+  dashboardSummaryRequestSchema,
+  dashboardSummaryResponseSchema
+} from "./schemas/dashboard.js";
 import {
   keysAddRequestSchema,
   keysAddResponseSchema,
@@ -211,6 +217,22 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists recent append-only audit events."
+  }),
+  "audit:query": defineChannel({
+    request: auditQueryRequestSchema,
+    response: auditQueryResponseSchema,
+    capability: "audit.readFiltered",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Filters append-only audit events by type, target, sensitivity, and date."
+  }),
+  "dashboard:summary": defineChannel({
+    request: dashboardSummaryRequestSchema,
+    response: dashboardSummaryResponseSchema,
+    capability: "dashboard.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Reads a bounded dashboard summary without launching work."
   }),
   "keys:add": defineChannel({
     request: keysAddRequestSchema,

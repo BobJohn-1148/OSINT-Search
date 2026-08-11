@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { AgentsView } from "./components/agents-view";
 import { AnalyzersView } from "./components/analyzers-view";
+import { AuditLogView } from "./components/audit-log-view";
 import { CasesView } from "./components/cases-view";
 import { DashboardView } from "./components/dashboard-view";
 import { ReportsView } from "./components/reports-view";
@@ -58,6 +59,8 @@ export function AppFrame() {
                   <NetworkScanView />
                 ) : route.id === "analyzers" ? (
                   <AnalyzersView />
+                ) : route.id === "audit-log" ? (
+                  <AuditLogView />
                 ) : (
                   <RouteStub route={route} />
                 )

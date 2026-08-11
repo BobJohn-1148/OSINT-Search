@@ -284,6 +284,44 @@ for (const required of ["image_searches", "STRICT"]) {
   }
 }
 
+const dashboardServiceText = read(path.join(srcRoot, "main", "dashboard", "dashboard-service.ts"));
+for (const required of ["summary()", "agentRuntimeService.states", "auditRepository.list"]) {
+  if (!dashboardServiceText.includes(required)) {
+    fail(`dashboard service is missing ${required}`);
+  }
+}
+
+const dashboardRepositoryText = read(path.join(srcRoot, "db", "repositories", "dashboard-repository.ts"));
+for (const required of ["activeCases", "recentSearches", "recentAgentRuns", "watchAlerts"]) {
+  if (!dashboardRepositoryText.includes(required)) {
+    fail(`dashboard repository is missing ${required}`);
+  }
+}
+
+const auditRepositoryText = read(path.join(srcRoot, "db", "repositories", "audit-repository.ts"));
+for (const required of ["public query", "object_id LIKE", "detail LIKE", "ts >=", "ts <="]) {
+  if (!auditRepositoryText.includes(required)) {
+    fail(`audit repository filtered query is missing ${required}`);
+  }
+}
+
+for (const required of ["dashboard:summary", "audit:query", "mutates: false"]) {
+  if (!ipcText.includes(required)) {
+    fail(`IPC registry is missing Phase 12 read-only channel metadata ${required}`);
+  }
+}
+
+const packageJsonText = read(path.join(repoRoot, "package.json"));
+for (const required of ["electron-builder", "package:dir", "package:win", "reacher-icon.ico"]) {
+  if (!packageJsonText.includes(required)) {
+    fail(`packaging config is missing ${required}`);
+  }
+}
+
+if (!fs.existsSync(path.join(repoRoot, "assets", "brand", "reacher-icon.ico"))) {
+  fail("Reacher Windows icon is missing");
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -292,4 +330,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 11 security invariants hold");
+console.log("PASS: Phase 12 security invariants hold");

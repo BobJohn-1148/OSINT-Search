@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 11;
+const MAX_PHASE = 12;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -349,6 +349,28 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("Browse image", "image upload picker route behavior");
   assertAnyTestIncludes("username sweep corroborates the same account across sources", "username corroboration across sources");
   assertAnyTestIncludes("search route runs image and username depth", "image username route behavior");
+} else if (requestedPhase === 12) {
+  assertIncludes("src/main/dashboard/dashboard-service.ts", "summary()", "dashboard summary service mechanism");
+  assertIncludes("src/db/repositories/dashboard-repository.ts", "recentSearches", "dashboard recent activity repository mechanism");
+  assertIncludes("src/main/ipc/handlers/dashboard-handlers.ts", "dashboard:summary", "dashboard IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "dashboard:summary", "dashboard IPC channel mechanism");
+  assertIncludes("src/renderer/components/dashboard-view.tsx", "Recent activity", "dashboard recent activity surface");
+  assertIncludes("src/renderer/components/dashboard-view.tsx", "Quick search", "dashboard quick search surface");
+  assertAnyTestIncludes("dashboard aggregates recent activity and active cases", "dashboard aggregates recent activity and active cases");
+
+  assertIncludes("src/db/repositories/audit-repository.ts", "public query", "audit filtered query repository mechanism");
+  assertIncludes("src/main/ipc/handlers/audit-handlers.ts", "audit:query", "audit query IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "audit:query", "audit query IPC channel mechanism");
+  assertIncludes("src/renderer/components/audit-log-view.tsx", "Apply filters", "audit log filter surface mechanism");
+  assertAnyTestIncludes("filters audit by type and date", "audit filters by type and date");
+
+  assertIncludes("src/renderer/components/settings-view.tsx", "tools.wslDistro", "settings WSL distro mechanism");
+  assertIncludes("src/renderer/components/settings-view.tsx", "agents.sharedMemoryScope", "settings shared memory scope mechanism");
+  assertIncludes("package.json", "electron-builder", "electron-builder dependency and scripts");
+  assertIncludes("package.json", "package:win", "Windows package script");
+  assertIncludes("package.json", "reacher-icon.ico", "Reacher icon package mechanism");
+  assertIncludes("scripts/package-smoke.mjs", "electron-builder", "packaging smoke script mechanism");
+  assertAnyTestIncludes("packaging smoke test verifies electron-builder config", "packaging smoke test");
 }
 
 if (process.exitCode) {

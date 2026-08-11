@@ -12,6 +12,7 @@ import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repo
 import { AnalyzersRepository } from "../../db/repositories/analyzers-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
+import { DashboardRepository } from "../../db/repositories/dashboard-repository.js";
 import { ImageSearchRepository } from "../../db/repositories/image-search-repository.js";
 import { MonitoringRepository } from "../../db/repositories/monitoring-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
@@ -35,6 +36,7 @@ import { createAgentsHandlers } from "./handlers/agents-handlers.js";
 import { createAnalyzersHandlers } from "./handlers/analyzers-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
+import { createDashboardHandlers } from "./handlers/dashboard-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createImageUsernameHandlers } from "./handlers/image-username-handlers.js";
 import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
@@ -54,6 +56,7 @@ import { ToolsService } from "../tools/tools-service.js";
 import { WslToolLauncher } from "../tools/wsl-launcher.js";
 import { ImageUsernameService } from "../image-username/image-username-service.js";
 import { MonitoringService } from "../monitoring/monitoring-service.js";
+import { DashboardService } from "../dashboard/dashboard-service.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -67,6 +70,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const agentRuntimeRepository = new AgentRuntimeRepository(db);
   const analyzersRepository = new AnalyzersRepository(db);
   const casesRepository = new CasesRepository(db);
+  const dashboardRepository = new DashboardRepository(db);
   const imageSearchRepository = new ImageSearchRepository(db);
   const monitoringRepository = new MonitoringRepository(db);
   const reportsRepository = new ReportsRepository(db);
@@ -89,6 +93,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     emitAgentEvents,
     app.getAppPath()
   );
+  const dashboardService = new DashboardService(dashboardRepository, auditRepository, agentRuntimeService);
   const emitToolOutput = (event: ToolOutputEvent): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("tools:output", event);
@@ -176,6 +181,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     }),
     ...createSettingsHandlers(settingsRepository),
     ...createAuditHandlers(auditRepository),
+    ...createDashboardHandlers(dashboardService),
     ...createCasesHandlers(casesRepository),
     ...createReportsHandlers(reportService, reportsRepository, (filePath) => shell.openPath(filePath)),
     ...createScanHandlers(scanService),

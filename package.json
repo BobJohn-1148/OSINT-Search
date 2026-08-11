@@ -13,8 +13,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run audit:security && node scripts/phase-audit.mjs 11",
-    "audit:security": "node scripts/audit-security.mjs"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run audit:security && node scripts/phase-audit.mjs 12",
+    "audit:security": "node scripts/audit-security.mjs",
+    "package:dir": "npm run build && electron-builder --dir --publish never",
+    "package:win": "npm run build && electron-builder --win --publish never",
+    "package:smoke": "node scripts/package-smoke.mjs"
   },
   "keywords": [
     "osint",
@@ -23,6 +26,35 @@
   ],
   "author": "",
   "license": "UNLICENSED",
+  "build": {
+    "appId": "local.reacher.desktop",
+    "productName": "Reacher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "package.json",
+      "assets/brand/**"
+    ],
+    "extraResources": [
+      {
+        "from": "assets/brand",
+        "to": "assets/brand"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/brand/reacher-icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
   "dependencies": {
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
@@ -53,6 +85,7 @@
     "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "^6.0.5",
     "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

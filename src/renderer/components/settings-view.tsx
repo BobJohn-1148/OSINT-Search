@@ -13,6 +13,8 @@ import { useReacherClient } from "../hooks/use-reacher-client";
 
 const defaultSource: KeySource = "openai";
 const cleanIdleSettingKey = "agents.cleanIdleStatuses";
+const wslDistroSettingKey = "tools.wslDistro";
+const sharedMemoryScopeSettingKey = "agents.sharedMemoryScope";
 
 export function SettingsView() {
   const { invoke } = useReacherClient();
@@ -23,14 +25,18 @@ export function SettingsView() {
   const [secret, setSecret] = useState("");
   const [status, setStatus] = useState("Ready");
   const [cleanIdleStatuses, setCleanIdleStatuses] = useState(false);
+  const [wslDistro, setWslDistro] = useState("Ubuntu");
+  const [sharedMemoryScope, setSharedMemoryScope] = useState("default");
   const keyedSources = useMemo(() => new Set(keys.map((key) => key.source)), [keys]);
 
   const refresh = useCallback(async (): Promise<void> => {
-    const [keyResult, providerResult, agentResult, cleanResult] = await Promise.all([
+    const [keyResult, providerResult, agentResult, cleanResult, wslResult, memoryScopeResult] = await Promise.all([
       invoke("keys:list", {}),
       invoke("providers:list", {}),
       invoke("agents:list", {}),
-      invoke("settings:get", { key: cleanIdleSettingKey })
+      invoke("settings:get", { key: cleanIdleSettingKey }),
+      invoke("settings:get", { key: wslDistroSettingKey }),
+      invoke("settings:get", { key: sharedMemoryScopeSettingKey })
     ]);
 
     if (keyResult.ok) {
@@ -45,8 +51,14 @@ export function SettingsView() {
     if (cleanResult.ok) {
       setCleanIdleStatuses(cleanResult.value.value === "true");
     }
+    if (wslResult.ok && wslResult.value.value) {
+      setWslDistro(wslResult.value.value);
+    }
+    if (memoryScopeResult.ok && memoryScopeResult.value.value) {
+      setSharedMemoryScope(memoryScopeResult.value.value);
+    }
 
-    const error = [keyResult, providerResult, agentResult, cleanResult].find((result) => !result.ok);
+    const error = [keyResult, providerResult, agentResult, cleanResult, wslResult, memoryScopeResult].find((result) => !result.ok);
     setStatus(error?.ok === false ? error.error.message : "Settings loaded");
   }, [invoke]);
 
@@ -102,6 +114,15 @@ export function SettingsView() {
     setCleanIdleStatuses(next);
     const result = await invoke("settings:set", { key: cleanIdleSettingKey, value: String(next) });
     setStatus(result.ok ? "Settings saved" : result.error.message);
+  }
+
+  async function saveRuntimeSettings(): Promise<void> {
+    const [wslResult, memoryScopeResult] = await Promise.all([
+      invoke("settings:set", { key: wslDistroSettingKey, value: wslDistro.trim() || "Ubuntu" }),
+      invoke("settings:set", { key: sharedMemoryScopeSettingKey, value: sharedMemoryScope.trim() || "default" })
+    ]);
+    const error = [wslResult, memoryScopeResult].find((result) => !result.ok);
+    setStatus(error?.ok === false ? error.error.message : "Runtime settings saved");
   }
 
   return (
@@ -249,6 +270,29 @@ export function SettingsView() {
               </div>
             );
           })}
+        </div>
+      </section>
+      <section className="console-panel settings-section" aria-labelledby="runtime-title">
+        <h2 className="section-title" id="runtime-title">
+          Local runtime
+        </h2>
+        <div className="field-grid">
+          <label className="field-label">
+            WSL distro
+            <input className="field-control" value={wslDistro} onChange={(event) => setWslDistro(event.target.value)} />
+          </label>
+          <label className="field-label">
+            Shared memory scope
+            <input
+              className="field-control"
+              value={sharedMemoryScope}
+              onChange={(event) => setSharedMemoryScope(event.target.value)}
+            />
+          </label>
+          <button className="action-button" type="button" onClick={() => void saveRuntimeSettings()}>
+            <Save size={16} aria-hidden="true" />
+            Save runtime
+          </button>
         </div>
       </section>
       <span className="status-text" role="status">

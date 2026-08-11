@@ -4,12 +4,20 @@
  * later filters could hide or mislabel sensitive history.
  */
 import type { AuditRepository } from "../../../db/repositories/audit-repository.js";
-import type { AuditListRequest, AuditListResponse } from "../../../shared/schemas/audit.js";
+import type {
+  AuditListRequest,
+  AuditListResponse,
+  AuditQueryRequest,
+  AuditQueryResponse
+} from "../../../shared/schemas/audit.js";
 
 export function createAuditHandlers(auditRepository: AuditRepository) {
   return {
     "audit:list": (request: AuditListRequest): AuditListResponse => ({
       events: auditRepository.list(request.limit)
+    }),
+    "audit:query": (request: AuditQueryRequest): AuditQueryResponse => ({
+      events: auditRepository.query(request)
     })
   };
 }

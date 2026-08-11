@@ -10,6 +10,7 @@ output/
 results/
 dist/
 build/
+release/
 .generated/
 .gh-token
 .gh-token.txt
