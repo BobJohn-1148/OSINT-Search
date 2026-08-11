@@ -10,6 +10,7 @@ import { Route, Routes } from "react-router-dom";
 import { AgentsView } from "./components/agents-view";
 import { AnalyzersView } from "./components/analyzers-view";
 import { CasesView } from "./components/cases-view";
+import { DashboardView } from "./components/dashboard-view";
 import { ReportsView } from "./components/reports-view";
 import { NetworkScanView } from "./components/network-scan-view";
 import { Sidebar } from "./components/sidebar";
@@ -41,6 +42,8 @@ export function AppFrame() {
               element={
                 route.id === "settings" ? (
                   <SettingsView />
+                ) : route.id === "dashboard" ? (
+                  <DashboardView />
                 ) : route.id === "search" ? (
                   <SearchView />
                 ) : route.id === "cases" ? (

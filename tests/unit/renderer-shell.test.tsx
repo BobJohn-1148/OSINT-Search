@@ -46,6 +46,53 @@ function createDefaultInvokeMock() {
     if (channel === "cases:list") {
       return Promise.resolve({ ok: true as const, value: { cases: [] } });
     }
+    if (channel === "watch:list") {
+      return Promise.resolve({ ok: true as const, value: { watches: [], alerts: [] } });
+    }
+    if (channel === "watch:exposures") {
+      return Promise.resolve({ ok: true as const, value: { exposures: [] } });
+    }
+    if (channel === "watch:add") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watch: {
+            id: "watch-one",
+            type: "email",
+            value: "security@example.com",
+            caseId: null,
+            checkIntervalMinutes: 60,
+            createdTs: "2026-08-10T10:00:00.000Z",
+            lastCheckedTs: null
+          }
+        }
+      });
+    }
+    if (channel === "watch:checkNow") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watch: {
+            id: "watch-one",
+            type: "email",
+            value: "security@example.com",
+            caseId: null,
+            checkIntervalMinutes: 60,
+            createdTs: "2026-08-10T10:00:00.000Z",
+            lastCheckedTs: "2026-08-10T10:01:00.000Z"
+          },
+          exposures: [],
+          newExposures: [],
+          alerts: [],
+          skippedSources: [],
+          savedItems: 0,
+          searchRunId: null
+        }
+      });
+    }
+    if (channel === "watch:remove") {
+      return Promise.resolve({ ok: true as const, value: { removed: true } });
+    }
     if (channel === "case:timeline") {
       return Promise.resolve({ ok: true as const, value: { items: [] } });
     }
@@ -146,7 +193,12 @@ beforeEach(() => {
         "analyzer:pcap:import",
         "analyzer:dork:build",
         "analyzer:mac:lookup",
-        "analyzer:vuln:lookup"
+        "analyzer:vuln:lookup",
+        "watch:add",
+        "watch:list",
+        "watch:remove",
+        "watch:checkNow",
+        "watch:exposures"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
       onAgentEvent: vi.fn().mockReturnValue(() => {}),
@@ -166,7 +218,9 @@ it("renders every stub route and the settings route so the app boots and navigat
     );
 
     expect(screen.getByRole("heading", { name: route.label })).toBeInTheDocument();
-    if (route.id === "settings") {
+    if (route.id === "dashboard") {
+      expect(screen.getByRole("button", { name: "Add watch" })).toBeInTheDocument();
+    } else if (route.id === "settings") {
       expect(screen.getByRole("heading", { name: "API keys" })).toBeInTheDocument();
     } else if (route.id === "search") {
       expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
@@ -630,6 +684,139 @@ it("analyzers route builds dorks and saves findings through IPC so query generat
   });
   expect(await screen.findByText("site:example.com intitle:login OR inurl:login")).toBeInTheDocument();
   expect(screen.getByText("dork / google-dork")).toBeInTheDocument();
+});
+
+it("dashboard adds a watch target and checks exposure alerts so credential monitoring is reachable", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "cases:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          cases: [
+            {
+              id: "case-one",
+              title: "Credential case",
+              status: "open",
+              createdTs: "2026-08-10T10:00:00.000Z",
+              updatedTs: "2026-08-10T10:00:00.000Z",
+              tags: []
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "watch:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watches: [
+            {
+              id: "watch-one",
+              type: "email",
+              value: "security@example.com",
+              caseId: "case-one",
+              checkIntervalMinutes: 60,
+              createdTs: "2026-08-10T10:00:00.000Z",
+              lastCheckedTs: null
+            }
+          ],
+          alerts: []
+        }
+      });
+    }
+    if (channel === "watch:exposures") {
+      return Promise.resolve({ ok: true as const, value: { exposures: [] } });
+    }
+    if (channel === "watch:add") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watch: {
+            id: "watch-one",
+            type: "email",
+            value: "security@example.com",
+            caseId: "case-one",
+            checkIntervalMinutes: 60,
+            createdTs: "2026-08-10T10:00:00.000Z",
+            lastCheckedTs: null
+          }
+        }
+      });
+    }
+    if (channel === "watch:checkNow") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watch: {
+            id: "watch-one",
+            type: "email",
+            value: "security@example.com",
+            caseId: "case-one",
+            checkIntervalMinutes: 60,
+            createdTs: "2026-08-10T10:00:00.000Z",
+            lastCheckedTs: "2026-08-10T10:01:00.000Z"
+          },
+          exposures: [
+            {
+              id: "exposure-one",
+              watchId: "watch-one",
+              source: "xposedornot",
+              title: "Acme breach",
+              detail: "XposedOrNot reported security@example.com in Acme breach.",
+              fingerprint: "xposedornot:acme breach",
+              firstSeenTs: "2026-08-10T10:01:00.000Z",
+              lastSeenTs: "2026-08-10T10:01:00.000Z"
+            }
+          ],
+          newExposures: [
+            {
+              id: "exposure-one",
+              watchId: "watch-one",
+              source: "xposedornot",
+              title: "Acme breach",
+              detail: "XposedOrNot reported security@example.com in Acme breach.",
+              fingerprint: "xposedornot:acme breach",
+              firstSeenTs: "2026-08-10T10:01:00.000Z",
+              lastSeenTs: "2026-08-10T10:01:00.000Z"
+            }
+          ],
+          alerts: [
+            {
+              id: "alert-one",
+              exposureId: "exposure-one",
+              watchId: "watch-one",
+              message: "security@example.com exposed in Acme breach",
+              createdTs: "2026-08-10T10:01:00.000Z",
+              acknowledgedTs: null
+            }
+          ],
+          skippedSources: [],
+          savedItems: 1,
+          searchRunId: "run-one"
+        }
+      });
+    }
+
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Add watch" }));
+  await user.click(await screen.findByRole("button", { name: "Check now" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith(
+      "watch:checkNow",
+      expect.objectContaining({ watchId: "watch-one", caseId: "case-one" })
+    );
+  });
+  expect(await screen.findByText("1 new exposures saved:1")).toBeInTheDocument();
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {

@@ -12,6 +12,7 @@ import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repo
 import { AnalyzersRepository } from "../../db/repositories/analyzers-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
+import { MonitoringRepository } from "../../db/repositories/monitoring-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
 import { ScansRepository } from "../../db/repositories/scans-repository.js";
 import { SettingsRepository } from "../../db/repositories/settings-repository.js";
@@ -34,6 +35,7 @@ import { createAnalyzersHandlers } from "./handlers/analyzers-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
+import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createReportsHandlers } from "./handlers/reports-handlers.js";
 import { createScanHandlers } from "./handlers/scan-handlers.js";
@@ -48,6 +50,7 @@ import { ReportService } from "../reports/report-service.js";
 import { ScanService } from "../scans/scan-service.js";
 import { ToolsService } from "../tools/tools-service.js";
 import { WslToolLauncher } from "../tools/wsl-launcher.js";
+import { MonitoringService } from "../monitoring/monitoring-service.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -61,6 +64,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const agentRuntimeRepository = new AgentRuntimeRepository(db);
   const analyzersRepository = new AnalyzersRepository(db);
   const casesRepository = new CasesRepository(db);
+  const monitoringRepository = new MonitoringRepository(db);
   const reportsRepository = new ReportsRepository(db);
   const scansRepository = new ScansRepository(db);
   const searchRepository = new SearchRepository(db);
@@ -99,6 +103,14 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     }
   };
   const scanService = new ScanService(scansRepository, toolsRepository, auditRepository, wslToolLauncher, emitScanOutput);
+  const monitoringService = new MonitoringService(
+    monitoringRepository,
+    casesRepository,
+    searchRepository,
+    auditRepository,
+    vaultRepository
+  );
+  monitoringService.startScheduler();
   const analyzersService = new AnalyzersService(
     analyzersRepository,
     casesRepository,
@@ -149,6 +161,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createArchitectAgentHandlers(architectAgentService),
     ...createToolsHandlers(toolsService),
     ...createAnalyzersHandlers(analyzersService),
+    ...createMonitoringHandlers(monitoringService),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

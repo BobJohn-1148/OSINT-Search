@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 9;
+const MAX_PHASE = 10;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -298,6 +298,32 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("vulnerability lookup caches NVD responses", "vulnerability cache behavior");
   assertAnyTestIncludes("vulnerability lookup rejects invalid NVD responses without caching them", "NVD failure does not cache empty results");
   assertAnyTestIncludes("analyzers route builds dorks and saves findings through IPC", "analyzers route behavior");
+} else if (requestedPhase === 10) {
+  assertIncludes("src/db/migrations/014-monitoring.ts", "watchlist", "watchlist migration mechanism");
+  assertIncludes("src/db/migrations/014-monitoring.ts", "exposures", "exposure persistence migration mechanism");
+  assertIncludes("src/db/migrations/014-monitoring.ts", "monitoring_alerts", "monitoring alert migration mechanism");
+  assertIncludes("src/db/migrations/014-monitoring.ts", "exposures_no_delete", "append-only exposure history mechanism");
+  assertIncludes("src/db/migrations/014-monitoring.ts", "monitoring_alerts_no_delete", "append-only alert history mechanism");
+  assertIncludes("src/db/repositories/monitoring-repository.ts", "removed_ts", "watch soft-remove mechanism");
+  assertIncludes("src/db/repositories/monitoring-repository.ts", "recordExposure", "exposure dedupe repository mechanism");
+  assertIncludes("src/db/repositories/monitoring-repository.ts", "dueWatches", "scheduled due-watch query mechanism");
+  assertIncludes("src/main/monitoring/credential-sources.ts", "xposedornot", "XposedOrNot free spine mechanism");
+  assertIncludes("src/main/monitoring/credential-sources.ts", "requiresKey: true", "paid source key-slot mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "vaultRepository.has", "paid source missing key skip mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "runDueRechecks", "scheduled recheck mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "setInterval", "main-process scheduler mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "createAlert", "exposure alert mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "casesRepository.addItem", "watch exposure save-to-case mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "searchRepository.saveRun", "monitoring feeds correlation model mechanism");
+  assertIncludes("src/main/monitoring/monitoring-service.ts", "auditRepository.record", "monitoring audit mechanism");
+  assertIncludes("src/main/ipc/handlers/monitoring-handlers.ts", "watch:checkNow", "monitoring IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "watch:exposures", "monitoring IPC channel mechanism");
+  assertIncludes("src/renderer/components/dashboard-view.tsx", "Add watch", "dashboard watchlist surface mechanism");
+  assertAnyTestIncludes("records and alerts on a new exposure", "add target check alert and save");
+  assertAnyTestIncludes("scheduled recheck fires and dedupes already-seen exposures", "scheduled recheck fires and dedupes");
+  assertAnyTestIncludes("paid source with no key is skipped without error", "paid source degrades gracefully");
+  assertAnyTestIncludes("removing a watch preserves exposure alerts", "exposure alerts append-only history");
+  assertAnyTestIncludes("dashboard adds a watch target and checks exposure alerts", "dashboard monitoring surface");
 }
 
 if (process.exitCode) {

@@ -76,6 +76,18 @@ import {
   keysTestResponseSchema
 } from "./schemas/keys.js";
 import {
+  watchAddRequestSchema,
+  watchAddResponseSchema,
+  watchCheckNowRequestSchema,
+  watchCheckNowResponseSchema,
+  watchExposuresRequestSchema,
+  watchExposuresResponseSchema,
+  watchListRequestSchema,
+  watchListResponseSchema,
+  watchRemoveRequestSchema,
+  watchRemoveResponseSchema
+} from "./schemas/monitoring.js";
+import {
   providersListRequestSchema,
   providersListResponseSchema,
   providersTestRequestSchema,
@@ -551,6 +563,46 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Looks up product vulnerabilities through the cached NVD path."
+  }),
+  "watch:add": defineChannel({
+    request: watchAddRequestSchema,
+    response: watchAddResponseSchema,
+    capability: "monitoring.write",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Adds or updates one local credential watch target."
+  }),
+  "watch:list": defineChannel({
+    request: watchListRequestSchema,
+    response: watchListResponseSchema,
+    capability: "monitoring.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists local watch targets and recent exposure alerts."
+  }),
+  "watch:remove": defineChannel({
+    request: watchRemoveRequestSchema,
+    response: watchRemoveResponseSchema,
+    capability: "monitoring.write",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Removes one local credential watch target."
+  }),
+  "watch:checkNow": defineChannel({
+    request: watchCheckNowRequestSchema,
+    response: watchCheckNowResponseSchema,
+    capability: "monitoring.check",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs a breach exposure check for one watch target and records new alerts."
+  }),
+  "watch:exposures": defineChannel({
+    request: watchExposuresRequestSchema,
+    response: watchExposuresResponseSchema,
+    capability: "monitoring.readExposures",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists stored breach exposures for all or one watch target."
   })
 } as const;
 

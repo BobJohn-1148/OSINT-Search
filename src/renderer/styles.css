@@ -561,6 +561,54 @@ select {
   overflow-wrap: anywhere;
 }
 
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 1.1fr) minmax(260px, 0.9fr);
+  gap: 18px;
+}
+
+.dashboard-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.dashboard-watch-form {
+  display: grid;
+  grid-template-columns: minmax(120px, 160px) minmax(180px, 1fr) minmax(160px, 220px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.dashboard-watch-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 36px;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
+.dashboard-watch-row div,
+.dashboard-alert-row {
+  display: grid;
+  gap: 5px;
+}
+
+.dashboard-alert-row {
+  min-height: 54px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
+.dashboard-watch-row strong,
+.dashboard-alert-row strong {
+  overflow-wrap: anywhere;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -856,6 +904,9 @@ select {
   .analyzers-command-row,
   .analyzers-layout,
   .analyzers-two-column,
+  .dashboard-layout,
+  .dashboard-watch-form,
+  .dashboard-watch-row,
   .scan-layout,
   .scan-command-grid,
   .scan-toggle-grid,

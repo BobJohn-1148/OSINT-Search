@@ -245,6 +245,27 @@ for (const required of ["evtx_imports", "pcap_imports", "vuln_cache", "STRICT"])
   }
 }
 
+const monitoringServiceText = read(path.join(srcRoot, "main", "monitoring", "monitoring-service.ts"));
+for (const required of ["vaultRepository.has", "vaultRepository.readSecret", "casesRepository.addItem", "searchRepository.saveRun", "createAlert", "runDueRechecks", "setInterval", "auditRepository.record"]) {
+  if (!monitoringServiceText.includes(required)) {
+    fail(`monitoring service is missing ${required}`);
+  }
+}
+
+const credentialSourcesText = read(path.join(srcRoot, "main", "monitoring", "credential-sources.ts"));
+for (const required of ["xposedornot", "requiresKey: true", "hibp", "leakcheck", "dehashed"]) {
+  if (!credentialSourcesText.includes(required)) {
+    fail(`credential sources are missing ${required}`);
+  }
+}
+
+const monitoringMigrationText = read(path.join(srcRoot, "db", "migrations", "014-monitoring.ts"));
+for (const required of ["watchlist", "exposures", "monitoring_alerts", "STRICT", "UNIQUE (watch_id, source, fingerprint)", "exposures_no_delete", "monitoring_alerts_no_delete", "ON DELETE RESTRICT"]) {
+  if (!monitoringMigrationText.includes(required)) {
+    fail(`monitoring migration is missing ${required}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -253,4 +274,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 9 security invariants hold");
+console.log("PASS: Phase 10 security invariants hold");
