@@ -23,7 +23,7 @@ it("selects model per agent so each prompt can switch providers independently", 
   });
   expect(agentsRepository.get("architect-agent")).toMatchObject({
     provider: "openai",
-    model: "gpt-5.1"
+    model: "codex"
   });
 });
 

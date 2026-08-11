@@ -7,6 +7,7 @@ import { AlertTriangle, MessageSquare, Play, RefreshCw } from "lucide-react";
 import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import rawStatusLines from "../../../planning/agent-status-lines.json";
 import type { AgentRecord } from "../../shared/schemas/agents";
+import type { ArchitectProposal } from "../../shared/schemas/architect-agent";
 import type {
   AgentLiveState,
   AgentMemoryRecord,
@@ -72,6 +73,10 @@ export function AgentsView(props: {
   const [sceneFailed, setSceneFailed] = useState(false);
   const [events, setEvents] = useState<AgentRuntimeEvent[]>([]);
   const [focused, setFocused] = useState<CameraFocusTarget | null>(null);
+  const [architectQuestion, setArchitectQuestion] = useState("How is IPC wired?");
+  const [architectRequest, setArchitectRequest] = useState("Add a focused feature with tests");
+  const [architectProposal, setArchitectProposal] = useState<ArchitectProposal | null>(null);
+  const [architectStatus, setArchitectStatus] = useState("Architect ready");
   const [detectedWebGlReady] = useState(() => canInitializeWebGl());
   const SceneComponent = props.SceneComponent ?? AgentsHqScene;
   const webGlReady = props.webGlReadyOverride ?? detectedWebGlReady;
@@ -199,6 +204,36 @@ export function AgentsView(props: {
     setStatus(result.ok ? "Settings saved" : result.error.message);
   }
 
+  async function askArchitect(): Promise<void> {
+    const result = await invoke("agent:architect:ask", {
+      question: architectQuestion,
+      files: ["src/shared/ipc.ts", "src/main/ipc/register.ts"]
+    });
+    setArchitectStatus(result.ok ? result.value.answer : result.error.message);
+  }
+
+  async function proposeArchitectPlan(): Promise<void> {
+    const result = await invoke("agent:architect:proposePlan", {
+      request: architectRequest,
+      files: ["src/shared/ipc.ts", "src/main/ipc/register.ts", "src/renderer/components/agents-view.tsx"]
+    });
+    if (!result.ok) {
+      setArchitectStatus(result.error.message);
+      return;
+    }
+    setArchitectProposal(result.value.proposal);
+    setArchitectStatus(result.value.proposal.summary);
+  }
+
+  async function applyArchitectPlan(): Promise<void> {
+    if (!architectProposal) {
+      return;
+    }
+    const result = await invoke("agent:architect:apply", { proposalId: architectProposal.id });
+    setArchitectStatus(result.ok ? (result.value.applied ? `Plan applied to ${result.value.changedFiles.join(", ")}` : "Apply cancelled") : result.error.message);
+    await refresh();
+  }
+
   function openAgent(agentId: string): void {
     setSelectedAgentId(agentId);
     setSelectedTab("Inbox");
@@ -283,6 +318,15 @@ export function AgentsView(props: {
               onCaseChange={setCaseId}
               onRun={() => void runSelectedAgent()}
               onCleanIdleChange={(next) => void setCleanIdle(next)}
+              architectQuestion={architectQuestion}
+              architectRequest={architectRequest}
+              architectProposal={architectProposal}
+              architectStatus={architectStatus}
+              onArchitectQuestionChange={setArchitectQuestion}
+              onArchitectRequestChange={setArchitectRequest}
+              onArchitectAsk={() => void askArchitect()}
+              onArchitectPropose={() => void proposeArchitectPlan()}
+              onArchitectApply={() => void applyArchitectPlan()}
             />
           ) : selectedTab === "History" ? (
             <HistoryPanel runs={runs} agents={agents} onRefresh={() => void refresh()} />
@@ -337,6 +381,15 @@ function AgentHub(props: {
   readonly onCaseChange: (caseId: string) => void;
   readonly onRun: () => void;
   readonly onCleanIdleChange: (value: boolean) => void;
+  readonly architectQuestion: string;
+  readonly architectRequest: string;
+  readonly architectProposal: ArchitectProposal | null;
+  readonly architectStatus: string;
+  readonly onArchitectQuestionChange: (value: string) => void;
+  readonly onArchitectRequestChange: (value: string) => void;
+  readonly onArchitectAsk: () => void;
+  readonly onArchitectPropose: () => void;
+  readonly onArchitectApply: () => void;
 }) {
   return (
     <div className="agents-panel-body">
@@ -386,6 +439,37 @@ function AgentHub(props: {
           Run agent
         </button>
       </section>
+
+      {props.selectedAgent?.id === "architect-agent" ? (
+        <section className="architect-box" aria-label="Architect agent">
+          <label className="compact-field">
+            Question
+            <input
+              className="field-control"
+              value={props.architectQuestion}
+              onChange={(event) => props.onArchitectQuestionChange(event.currentTarget.value)}
+            />
+          </label>
+          <button className="action-button" type="button" onClick={props.onArchitectAsk}>
+            Ask architect
+          </button>
+          <label className="compact-field">
+            Feature request
+            <input
+              className="field-control"
+              value={props.architectRequest}
+              onChange={(event) => props.onArchitectRequestChange(event.currentTarget.value)}
+            />
+          </label>
+          <button className="action-button" type="button" onClick={props.onArchitectPropose}>
+            Propose plan
+          </button>
+          <button className="action-button" type="button" disabled={!props.architectProposal} onClick={props.onArchitectApply}>
+            Apply approved plan
+          </button>
+          <p className="status-text">{props.architectStatus}</p>
+        </section>
+      ) : null}
 
       <section className="agents-event-list" aria-label="Inbox events">
         {props.events.length === 0 ? (

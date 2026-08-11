@@ -1,12 +1,12 @@
 /**
  * Phase audit is a source-backed checklist so done means mechanisms and tests
  * exist together. If exit criteria lived only in prose, a green test suite could
- * still miss an entire Phase 0 requirement.
+ * still miss an implemented phase requirement.
  */
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 5;
+const MAX_PHASE = 6;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -166,6 +166,39 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("list-view fallback renders", "list fallback renders");
   assertAnyTestIncludes("scene-init failure does not crash", "scene failure fallback");
   assertAnyTestIncludes("search route sends a selected tree node to an agent", "send-to-agent search handoff");
+} else if (requestedPhase === 6) {
+  assertIncludes("src/main/agents/architect-agent-service.ts", "RepoReadTool", "architect repo-read mechanism");
+  assertIncludes("src/main/agents/architect-chat-provider.ts", "ArchitectChatProvider", "architect provider abstraction");
+  assertIncludes("src/main/agents/architect-chat-provider.ts", "ArchitectProviderResolver", "architect provider resolver");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "provider.ask", "architect ask provider call");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "provider.proposePlan", "architect plan provider call");
+  assertIncludes("src/main/agents/architect-apply-executor.ts", "PlanArtifactApplyExecutor", "architect apply executor mechanism");
+  assertIncludes("src/main/agents/architect-apply-executor.ts", "realpathSync.native", "architect apply canonical write boundary");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "applyExecutor.apply", "architect approved write mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "agent.architect.apply.approved", "architect pre-write audit mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "architectProposalSchema.parse", "architect plan schema mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "confirmApply", "main-owned confirm mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "auditRepository.record", "architect audit mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "appendMemory", "architect shared memory mechanism");
+  assertIncludes("src/main/agents/repo-read-tool.ts", "realpathSync.native", "canonical repo-read boundary mechanism");
+  assertIncludes("src/main/ipc/handlers/architect-agent-handlers.ts", "agent:architect:ask", "architect ask handler");
+  assertIncludes("src/main/ipc/handlers/architect-agent-handlers.ts", "agent:architect:proposePlan", "architect plan handler");
+  assertIncludes("src/main/ipc/handlers/architect-agent-handlers.ts", "agent:architect:apply", "architect apply handler");
+  assertIncludes("src/shared/ipc.ts", "agent:architect:apply", "architect IPC channel");
+  assertIncludes("src/renderer/components/agents-view.tsx", "Ask architect", "architect in-app controls");
+  assertIncludes("src/db/migrations/010-architect-agent.ts", "model = 'codex'", "architect Codex default migration");
+  assertAnyTestIncludes("answers a codebase question citing real files", "architect answers codebase question");
+  assertAnyTestIncludes("drafts a plan citing real files", "architect drafts feature plan");
+  assertAnyTestIncludes("no write happens without an explicit confirm", "architect writes gated by confirm");
+  assertAnyTestIncludes("provider and model is switchable and architect actions are audited", "architect provider switch and audit");
+  assertAnyTestIncludes("invokes the switched architect provider", "architect resolver follows settings provider");
+  assertAnyTestIncludes("approved confirm writes a plan artifact", "architect approved apply writes");
+  assertAnyTestIncludes("does not execute an approved write when the pre-write audit fails", "architect pre-write audit blocks mutation");
+  assertAnyTestIncludes("audits ask propose and apply", "architect all actions audited");
+  assertAnyTestIncludes("uses shared memory so architect plans persist across agents and providers", "architect shared memory");
+  assertAnyTestIncludes("rejects symlink escapes outside the project", "architect repo-read symlink escape rejection");
+  assertAnyTestIncludes("rejects apply symlink escapes outside the project", "architect apply symlink escape rejection");
+  assertAnyTestIncludes("rejects apply ancestor symlink escapes before mkdir", "architect apply ancestor symlink escape rejection");
 }
 
 if (process.exitCode) {

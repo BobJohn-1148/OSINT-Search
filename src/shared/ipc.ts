@@ -12,6 +12,14 @@ import {
   agentsSetModelResponseSchema
 } from "./schemas/agents.js";
 import {
+  architectApplyRequestSchema,
+  architectApplyResponseSchema,
+  architectAskRequestSchema,
+  architectAskResponseSchema,
+  architectProposePlanRequestSchema,
+  architectProposePlanResponseSchema
+} from "./schemas/architect-agent.js";
+import {
   agentMemoryListRequestSchema,
   agentMemoryListResponseSchema,
   agentPlaybooksRequestSchema,
@@ -243,6 +251,30 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists reusable scheduled agent playbooks."
+  }),
+  "agent:architect:ask": defineChannel({
+    request: architectAskRequestSchema,
+    response: architectAskResponseSchema,
+    capability: "agents.architect.ask",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Asks the architect agent a codebase question and audits the action."
+  }),
+  "agent:architect:proposePlan": defineChannel({
+    request: architectProposePlanRequestSchema,
+    response: architectProposePlanResponseSchema,
+    capability: "agents.architect.plan",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Drafts a cited feature plan from scoped repository reads."
+  }),
+  "agent:architect:apply": defineChannel({
+    request: architectApplyRequestSchema,
+    response: architectApplyResponseSchema,
+    capability: "agents.architect.apply",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Applies a drafted architect plan only after a main-process confirmation."
   }),
   "search:run": defineChannel({
     request: searchRunRequestSchema,

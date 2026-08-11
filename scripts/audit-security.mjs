@@ -1,7 +1,7 @@
 /**
- * Security audit is deliberately narrow in Phase 0 because it checks invariants
- * that already have code. If this script pretended to validate future vault or
- * WSL behavior, later phases would inherit false confidence.
+ * Security audit is source-scoped to implemented phases because each phase adds
+ * new invariants the app can actually prove. If this script claimed coverage
+ * without matching source checks, later phases would inherit false confidence.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -104,6 +104,34 @@ for (const required of ["maxItems", "flushMs", "flush()"]) {
   }
 }
 
+const architectText = read(path.join(srcRoot, "main", "agents", "architect-agent-service.ts"));
+for (const required of ["confirmApply", "RepoReadTool", "providerResolver.resolve", "provider.ask", "provider.proposePlan", "agent.architect.apply.approved", "applyExecutor.apply", "auditRepository.record", "appendMemory"]) {
+  if (!architectText.includes(required)) {
+    fail(`architect agent service is missing ${required}`);
+  }
+}
+
+const architectProviderText = read(path.join(srcRoot, "main", "agents", "architect-chat-provider.ts"));
+for (const required of ["ArchitectProviderResolver", "resolve(provider", "CodexArchitectProvider"]) {
+  if (!architectProviderText.includes(required)) {
+    fail(`architect chat provider is missing ${required}`);
+  }
+}
+
+const architectExecutorText = read(path.join(srcRoot, "main", "agents", "architect-apply-executor.ts"));
+for (const required of ["PlanArtifactApplyExecutor", "realpathSync.native", "writeFileSync", "planning"]) {
+  if (!architectExecutorText.includes(required)) {
+    fail(`architect apply executor is missing ${required}`);
+  }
+}
+
+const repoReadText = read(path.join(srcRoot, "main", "agents", "repo-read-tool.ts"));
+for (const required of ["realpathSync.native", "path.relative", "outside the Reacher repo", "assertExistingFile"]) {
+  if (!repoReadText.includes(required)) {
+    fail(`repo read tool is missing ${required}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -112,4 +140,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 5 security invariants hold");
+console.log("PASS: Phase 6 security invariants hold");

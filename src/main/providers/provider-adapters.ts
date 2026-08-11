@@ -69,7 +69,7 @@ function localProvider(id: ProviderId, label: string, defaultModel: string, avai
 }
 
 export const providerAdapters: readonly ProviderAdapter[] = [
-  externalProvider("openai", "OpenAI", "openai", "gpt-5.1", ["gpt-5.1", "gpt-5.1-mini"], "sk-"),
+  externalProvider("openai", "OpenAI", "openai", "gpt-5.1", ["codex", "gpt-5.1", "gpt-5.1-mini"], "sk-"),
   externalProvider("xai", "xAI Grok", "xai", "grok-4.1", ["grok-4.1", "grok-4.1-fast"], "xai-"),
   externalProvider("anthropic", "Anthropic", "anthropic", "claude-sonnet-4.5", ["claude-sonnet-4.5", "claude-haiku-4.5"], "sk-ant-"),
   localProvider("ollama", "Ollama", "llama3.3", ["llama3.3", "qwen2.5-coder", "mistral-small"]),

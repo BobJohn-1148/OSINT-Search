@@ -3,7 +3,8 @@
  * functions in one place. If channels were registered ad hoc, Object.keys(IPC)
  * in preload could expose a channel that main never validates or handles.
  */
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import type { MessageBoxOptions } from "electron";
 import path from "node:path";
 import type { ReacherDatabase } from "../../db/database.js";
 import { AgentsRepository } from "../../db/repositories/agents-repository.js";
@@ -18,7 +19,9 @@ import type { VaultCrypto } from "../security/vault-crypto.js";
 import { searchConnectors } from "../search/connectors/index.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
 import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
+import { ArchitectAgentService } from "../agents/architect-agent-service.js";
 import type { AgentRuntimeEvent } from "../../shared/schemas/agents-runtime.js";
+import { createArchitectAgentHandlers } from "./handlers/architect-agent-handlers.js";
 import { createAgentRuntimeHandlers } from "./handlers/agent-runtime-handlers.js";
 import { createAgentsHandlers } from "./handlers/agents-handlers.js";
 import { createAuditHandlers } from "./handlers/audit-handlers.js";
@@ -60,7 +63,29 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     casesRepository,
     auditRepository,
     emitAgentEvents,
-    process.cwd()
+    app.getAppPath()
+  );
+  const architectAgentService = new ArchitectAgentService(
+    agentsRepository,
+    agentRuntimeRepository,
+    auditRepository,
+    app.getAppPath(),
+    async (proposal) => {
+      const focusedWindow = BrowserWindow.getFocusedWindow();
+      const options: MessageBoxOptions = {
+        type: "question",
+        buttons: ["Apply", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Confirm architect apply",
+        message: "Apply architect plan?",
+        detail: proposal.summary
+      };
+      const response = focusedWindow
+        ? await dialog.showMessageBox(focusedWindow, options)
+        : await dialog.showMessageBox(options);
+      return response.response === 0;
+    }
   );
   const reportService = new ReportService(
     casesRepository,
@@ -79,6 +104,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createProvidersHandlers(vaultRepository),
     ...createAgentsHandlers(agentsRepository),
     ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
+    ...createArchitectAgentHandlers(architectAgentService),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

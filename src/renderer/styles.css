@@ -522,6 +522,14 @@ select {
   align-items: end;
 }
 
+.architect-box {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  padding: 12px 0;
+}
+
 .agents-run-box .action-button,
 .agents-run-box .compact-field:nth-child(3) {
   grid-column: 1 / -1;
