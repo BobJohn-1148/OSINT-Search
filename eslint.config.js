@@ -42,5 +42,14 @@ export default tseslint.config(
         project: false
       }
     }
+  },
+  {
+    files: ["src/tools/**/*.ts"],
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        project: false
+      }
+    }
   }
 );

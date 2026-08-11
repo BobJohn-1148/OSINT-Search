@@ -34,6 +34,9 @@ function createDefaultInvokeMock() {
     if (channel === "case:summary") {
       return Promise.resolve({ ok: true as const, value: { summary: { caseId: "case-one", counts: {}, keyEntities: [] } } });
     }
+    if (channel === "report:list") {
+      return Promise.resolve({ ok: true as const, value: { reports: [] } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -57,7 +60,10 @@ beforeEach(() => {
         "cases:create",
         "case:addItem",
         "case:timeline",
-        "case:summary"
+        "case:summary",
+        "report:generate",
+        "report:list",
+        "report:open"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
       invoke: invokeMock
@@ -80,6 +86,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
     } else if (route.id === "cases") {
       expect(screen.getByRole("button", { name: "Create case" })).toBeInTheDocument();
+    } else if (route.id === "reports") {
+      expect(screen.getByRole("button", { name: "Generate report" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -259,6 +267,62 @@ it("cases route renders timeline items so saved evidence can be verified", async
 
   expect(await screen.findByText("Saved domain")).toBeInTheDocument();
   expect(screen.getByText("example.com appeared in RDAP")).toBeInTheDocument();
+});
+
+it("reports route generates a PDF from a selected case so exports are reachable from the shell", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "cases:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          cases: [
+            {
+              id: "case-one",
+              title: "Acme review",
+              status: "open",
+              createdTs: "2026-08-10T10:00:00.000Z",
+              updatedTs: "2026-08-10T10:00:00.000Z",
+              tags: []
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "report:list") {
+      return Promise.resolve({ ok: true as const, value: { reports: [] } });
+    }
+    if (channel === "report:generate") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          report: {
+            id: "report-one",
+            caseId: "case-one",
+            scanId: null,
+            format: "pdf",
+            path: "C:\\reports\\acme.pdf",
+            createdTs: "2026-08-10T10:00:00.000Z"
+          }
+        }
+      });
+    }
+
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/reports"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Generate report" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("report:generate", { caseId: "case-one", format: "pdf" });
+  });
+  expect(await screen.findByText("Generated PDF report")).toBeInTheDocument();
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {

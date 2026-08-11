@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 3;
+const MAX_PHASE = 4;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -122,6 +122,22 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
 
   assertIncludes("src/db/migrations/007-cases.ts", "fts5", "FTS mechanism");
   assertAnyTestIncludes("FTS finds a saved value by substring", "FTS works");
+} else if (requestedPhase === 4) {
+  assertIncludes("src/main/reports/report-service.ts", "ReportService", "report service mechanism");
+  assertIncludes("src/main/reports/pdf-renderer.ts", "pdfkit", "PDF renderer mechanism");
+  assertIncludes("src/main/reports/docx-renderer.ts", "docx", "Word renderer mechanism");
+  assertAnyTestIncludes("renders a PDF and a DOCX from a case fixture", "PDF and DOCX output");
+
+  assertIncludes("src/main/reports/report-model.ts", "citations", "citation model mechanism");
+  assertAnyTestIncludes("the report includes each finding's cited source", "citations present");
+
+  assertIncludes("src/main/reports/report-service.ts", "auditRepository.record", "report generation audit mechanism");
+  assertAnyTestIncludes("generation writes an audit event", "generation audited");
+
+  assertIncludes("src/db/migrations/008-reports.ts", "reports", "report row migration");
+  assertIncludes("src/renderer/components/reports-view.tsx", "report:generate", "reports list surface mechanism");
+  assertAnyTestIncludes("output is deterministic for a fixed fixture", "deterministic output");
+  assertAnyTestIncludes("reports route generates a PDF from a selected case", "reports surface");
 }
 
 if (process.exitCode) {

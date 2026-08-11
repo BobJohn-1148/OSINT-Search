@@ -50,6 +50,14 @@ import {
   providersTestResponseSchema
 } from "./schemas/providers.js";
 import {
+  reportGenerateRequestSchema,
+  reportGenerateResponseSchema,
+  reportListRequestSchema,
+  reportListResponseSchema,
+  reportOpenRequestSchema,
+  reportOpenResponseSchema
+} from "./schemas/reports.js";
+import {
   searchGetRequestSchema,
   searchGetResponseSchema,
   searchCancelRequestSchema,
@@ -279,6 +287,30 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Full-text searches saved evidence within a case."
+  }),
+  "report:generate": defineChannel({
+    request: reportGenerateRequestSchema,
+    response: reportGenerateResponseSchema,
+    capability: "reports.generate",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Generates a cited PDF or Word report from a case or scan."
+  }),
+  "report:list": defineChannel({
+    request: reportListRequestSchema,
+    response: reportListResponseSchema,
+    capability: "reports.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists generated local report artifacts."
+  }),
+  "report:open": defineChannel({
+    request: reportOpenRequestSchema,
+    response: reportOpenResponseSchema,
+    capability: "reports.open",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Opens one generated report by local report id."
   })
 } as const;
 

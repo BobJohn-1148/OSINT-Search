@@ -3,11 +3,13 @@
  * functions in one place. If channels were registered ad hoc, Object.keys(IPC)
  * in preload could expose a channel that main never validates or handles.
  */
-import { BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
+import path from "node:path";
 import type { ReacherDatabase } from "../../db/database.js";
 import { AgentsRepository } from "../../db/repositories/agents-repository.js";
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
+import { ReportsRepository } from "../../db/repositories/reports-repository.js";
 import { SettingsRepository } from "../../db/repositories/settings-repository.js";
 import { VaultRepository } from "../../db/repositories/vault-repository.js";
 import { SearchRepository } from "../../db/repositories/search-repository.js";
@@ -19,10 +21,14 @@ import { createAuditHandlers } from "./handlers/audit-handlers.js";
 import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
+import { createReportsHandlers } from "./handlers/reports-handlers.js";
 import { createSearchHandlers } from "./handlers/search-handlers.js";
 import { createSettingsHandlers } from "./handlers/settings-handlers.js";
 import { createSystemHandlers } from "./handlers/system-handlers.js";
 import { executeIpcHandler } from "./transport.js";
+import { createDocxRenderer } from "../reports/docx-renderer.js";
+import { createPdfRenderer } from "../reports/pdf-renderer.js";
+import { ReportService } from "../reports/report-service.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -34,14 +40,23 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const auditRepository = new AuditRepository(db);
   const agentsRepository = new AgentsRepository(db);
   const casesRepository = new CasesRepository(db);
+  const reportsRepository = new ReportsRepository(db);
   const searchRepository = new SearchRepository(db);
   const settingsRepository = new SettingsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
+  const reportService = new ReportService(
+    casesRepository,
+    reportsRepository,
+    auditRepository,
+    { pdf: createPdfRenderer(), docx: createDocxRenderer() },
+    path.join(app.getPath("userData"), "reports")
+  );
   const handlers: HandlerMap = {
     ...createSystemHandlers(auditRepository),
     ...createSettingsHandlers(settingsRepository),
     ...createAuditHandlers(auditRepository),
     ...createCasesHandlers(casesRepository),
+    ...createReportsHandlers(reportService, reportsRepository, (filePath) => shell.openPath(filePath)),
     ...createKeysHandlers(vaultRepository, auditRepository),
     ...createProvidersHandlers(vaultRepository),
     ...createAgentsHandlers(agentsRepository),

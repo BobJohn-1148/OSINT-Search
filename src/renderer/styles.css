@@ -313,6 +313,13 @@ input {
   gap: 12px;
 }
 
+.report-command-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(120px, 180px) auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
 .cases-layout {
   display: grid;
   grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) minmax(220px, 320px);
@@ -335,17 +342,24 @@ input {
 }
 
 .case-list-button:hover,
-.timeline-item:hover {
+.timeline-item:hover,
+.report-row:hover {
   border-color: var(--color-border-strong);
   background: var(--color-surface-raised);
 }
 
-.timeline-item {
+.timeline-item,
+.report-row {
   display: grid;
   gap: 6px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   padding: 10px;
+}
+
+.report-row {
+  grid-template-columns: minmax(0, 1fr) auto 36px;
+  align-items: center;
 }
 
 .search-layout {
@@ -433,10 +447,12 @@ input {
 
   .settings-grid,
   .search-command-row,
-  .search-layout,
-  .case-command-row,
-  .case-search-row,
-  .cases-layout,
+    .search-layout,
+    .case-command-row,
+    .case-search-row,
+    .report-command-row,
+    .report-row,
+    .cases-layout,
   .field-grid,
   .agent-row {
     grid-template-columns: 1fr;

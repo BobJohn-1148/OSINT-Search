@@ -94,4 +94,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 3 security invariants hold");
+console.log("PASS: Phase 4 security invariants hold");

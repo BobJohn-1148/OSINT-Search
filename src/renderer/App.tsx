@@ -8,6 +8,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { CasesView } from "./components/cases-view";
+import { ReportsView } from "./components/reports-view";
 import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
 import { SearchView } from "./components/search-view";
@@ -40,6 +41,8 @@ export function AppFrame() {
                   <SearchView />
                 ) : route.id === "cases" ? (
                   <CasesView />
+                ) : route.id === "reports" ? (
+                  <ReportsView />
                 ) : (
                   <RouteStub route={route} />
                 )
