@@ -106,6 +106,12 @@ import {
   mobileProfilesResponseSchema
 } from "./schemas/mobile.js";
 import {
+  methodologyExportRequestSchema,
+  methodologyExportResponseSchema,
+  methodologyListRequestSchema,
+  methodologyListResponseSchema
+} from "./schemas/methodology.js";
+import {
   providersListRequestSchema,
   providersListResponseSchema,
   providersTestRequestSchema,
@@ -675,6 +681,22 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Generates candidate public social profile URLs from the offline WhatsMyName catalog."
+  }),
+  "methodology:list": defineChannel({
+    request: methodologyListRequestSchema,
+    response: methodologyListResponseSchema,
+    capability: "methodology.read",
+    sensitivity: "low",
+    mutates: false,
+    summary: "Lists the OWASP PTES OSSTMM methodology map and linked Reacher tools."
+  }),
+  "methodology:export": defineChannel({
+    request: methodologyExportRequestSchema,
+    response: methodologyExportResponseSchema,
+    capability: "methodology.export",
+    sensitivity: "low",
+    mutates: false,
+    summary: "Exports the methodology coverage matrix as CSV text."
   }),
   "search:image": defineChannel({
     request: searchImageRequestSchema,

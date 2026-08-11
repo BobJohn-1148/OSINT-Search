@@ -39,6 +39,7 @@ import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createDashboardHandlers } from "./handlers/dashboard-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createImageUsernameHandlers } from "./handlers/image-username-handlers.js";
+import { createMethodologyHandlers } from "./handlers/methodology-handlers.js";
 import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
 import { createMobileHandlers } from "./handlers/mobile-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
@@ -61,6 +62,7 @@ import { MonitoringService } from "../monitoring/monitoring-service.js";
 import { DashboardService } from "../dashboard/dashboard-service.js";
 import { MobileService } from "../mobile/mobile-service.js";
 import { SocialAnalyzerService } from "../social/social-analyzer-service.js";
+import { MethodologyService } from "../methodology/methodology-service.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -86,6 +88,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const wslToolLauncher = new WslToolLauncher();
   const mobileService = new MobileService();
   const socialAnalyzerService = new SocialAnalyzerService();
+  const methodologyService = new MethodologyService();
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("agent:events", { events });
@@ -201,6 +204,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createMonitoringHandlers(monitoringService),
     ...createMobileHandlers(mobileService),
     ...createSocialHandlers(socialAnalyzerService),
+    ...createMethodologyHandlers(methodologyService),
     ...createImageUsernameHandlers(imageUsernameService),
     ...createSearchHandlers(
       searchRepository,

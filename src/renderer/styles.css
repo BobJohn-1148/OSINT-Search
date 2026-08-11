@@ -713,6 +713,69 @@ select {
   overflow-wrap: anywhere;
 }
 
+.methodology-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(340px, 1.2fr);
+  gap: 18px;
+}
+
+.methodology-flow,
+.methodology-detail {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.methodology-flow-step {
+  display: grid;
+  gap: 10px;
+}
+
+.methodology-phase {
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  text-align: left;
+}
+
+.methodology-phase.is-selected {
+  border-color: var(--color-accent-border);
+  background: var(--color-accent-surface);
+}
+
+.methodology-connector {
+  justify-self: center;
+  width: 2px;
+  height: 24px;
+  background: var(--color-accent-border);
+}
+
+.methodology-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.methodology-ref,
+.methodology-auth {
+  display: inline-grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.methodology-tool-row {
+  display: grid;
+  gap: 8px;
+  min-height: 72px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -1027,6 +1090,7 @@ select {
   .agents-hq-layout,
   .agents-run-box,
   .mobile-layout,
+  .methodology-layout,
   .social-layout,
   .social-command-panel,
   .field-grid,

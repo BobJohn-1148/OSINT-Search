@@ -9,6 +9,7 @@ import {
   Briefcase,
   FileText,
   Gauge,
+  GitBranch,
   Network,
   Search,
   Settings,
@@ -92,6 +93,13 @@ export const navigationRoutes: readonly NavigationRoute[] = [
     label: "Social analyzer",
     summary: "Public username candidates across hundreds of networks can be prepared for verification.",
     Icon: Users
+  },
+  {
+    id: "methodology-map",
+    path: "/methodology-map",
+    label: "Methodology map",
+    summary: "OWASP, PTES, and OSSTMM coverage maps to Reacher surfaces and gated tools.",
+    Icon: GitBranch
   },
   {
     id: "reports",

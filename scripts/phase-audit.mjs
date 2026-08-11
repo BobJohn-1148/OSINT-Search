@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 13;
+const MAX_PHASE = 14;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -393,6 +393,18 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/main/ipc/handlers/social-handlers.ts", "social:analyze", "social IPC handler mechanism");
   assertIncludes("src/renderer/components/social-analyzer-view.tsx", "Social analyzer", "social analyzer route surface");
   assertAnyTestIncludes("more than three hundred networks without marking them verified", "social analyzer broad candidate test");
+} else if (requestedPhase === 14) {
+  assertIncludes("planning/METHODOLOGY_MAP.md", "OWASP", "methodology source spec");
+  assertIncludes("src/main/methodology/methodology-service.ts", "Exploitation readiness", "safe exploitation-readiness phase mechanism");
+  assertIncludes("src/main/methodology/methodology-service.ts", "exportCsv", "coverage CSV export mechanism");
+  assertIncludes("src/main/ipc/handlers/methodology-handlers.ts", "methodology:list", "methodology IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "methodology:export", "methodology IPC channel mechanism");
+  assertIncludes("src/renderer/components/methodology-map-view.tsx", "methodology-connector", "connected methodology phase mechanism");
+  assertIncludes("src/renderer/components/methodology-map-view.tsx", "Export coverage spreadsheet", "methodology route export surface");
+  assertIncludes("src/renderer/navigation.ts", "methodology-map", "methodology navigation mechanism");
+  assertAnyTestIncludes("lists six methodology phases with authorization-aware tools", "methodology six phases and authorization");
+  assertAnyTestIncludes("exports coverage spreadsheet CSV", "methodology coverage export");
+  assertAnyTestIncludes("renders six connected methodology phases and stays read-only", "methodology connected read-only route behavior");
 }
 
 if (process.exitCode) {

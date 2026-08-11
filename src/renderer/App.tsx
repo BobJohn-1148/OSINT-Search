@@ -12,6 +12,7 @@ import { AnalyzersView } from "./components/analyzers-view";
 import { AuditLogView } from "./components/audit-log-view";
 import { CasesView } from "./components/cases-view";
 import { DashboardView } from "./components/dashboard-view";
+import { MethodologyMapView } from "./components/methodology-map-view";
 import { MobileView } from "./components/mobile-view";
 import { ReportsView } from "./components/reports-view";
 import { NetworkScanView } from "./components/network-scan-view";
@@ -65,6 +66,8 @@ export function AppFrame() {
                   <MobileView />
                 ) : route.id === "social-analyzer" ? (
                   <SocialAnalyzerView />
+                ) : route.id === "methodology-map" ? (
+                  <MethodologyMapView />
                 ) : route.id === "audit-log" ? (
                   <AuditLogView />
                 ) : (

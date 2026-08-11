@@ -353,6 +353,18 @@ for (const disallowed of ["AmsiScanBuffer", "EtwEventWrite", "Cobalt Stager", "S
   }
 }
 
+const methodologyServiceText = read(path.join(srcRoot, "main", "methodology", "methodology-service.ts"));
+for (const required of ["Exploitation readiness", "authorizationRequired", "exportCsv", "CSV spreadsheet"]) {
+  if (!methodologyServiceText.includes(required)) {
+    fail(`methodology service is missing ${required}`);
+  }
+}
+for (const disallowed of ["AmsiScanBuffer", "EtwEventWrite", "reverse shell", "shellcode wrapper", "Cobalt Stager", "Sliver stager"]) {
+  if (methodologyServiceText.toLowerCase().includes(disallowed.toLowerCase())) {
+    fail(`methodology service contains disallowed payload or evasion term: ${disallowed}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -361,4 +373,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 13 security invariants hold");
+console.log("PASS: Phase 14 security invariants hold");

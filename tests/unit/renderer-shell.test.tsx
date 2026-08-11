@@ -111,6 +111,39 @@ function createDefaultInvokeMock() {
         }
       });
     }
+    if (channel === "methodology:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          phases: [
+            {
+              id: "reconnaissance",
+              title: "Reconnaissance",
+              summary: "Gather public context.",
+              frameworkRefs: ["OWASP WSTG-INFO"],
+              tools: [
+                {
+                  id: "search",
+                  label: "OSINT search",
+                  surface: "Search",
+                  command: "search:run",
+                  input: "Seed",
+                  output: "Observations",
+                  tier: "passive",
+                  authorizationRequired: false
+                }
+              ]
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "methodology:export") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { filename: "reacher-methodology-coverage.csv", csv: "phase,tool\nReconnaissance,OSINT search" }
+      });
+    }
     if (channel === "settings:get") {
       return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "false" } });
     }
@@ -266,6 +299,8 @@ beforeEach(() => {
         "mobile:profiles",
         "mobile:detect",
         "social:analyze",
+        "methodology:list",
+        "methodology:export",
         "keys:list",
         "providers:list",
         "agents:list",
@@ -348,6 +383,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Detect mobile devices" })).toBeInTheDocument();
     } else if (route.id === "social-analyzer") {
       expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
+    } else if (route.id === "methodology-map") {
+      expect(screen.getByRole("button", { name: "Export coverage spreadsheet" })).toBeInTheDocument();
     } else if (route.id === "audit-log") {
       expect(screen.getByRole("button", { name: "Apply filters" })).toBeInTheDocument();
     } else {
@@ -1003,6 +1040,67 @@ it("search route runs image and username depth so Phase 11 pivots enter the corr
     sendToAgent: true
   });
   expect(await screen.findByText("Username sweep complete; saved:2")).toBeInTheDocument();
+});
+
+it("renders six connected methodology phases and stays read-only so the map cannot launch tools", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "methodology:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          phases: [
+            "Reconnaissance",
+            "Scanning and enumeration",
+            "Vulnerability analysis",
+            "Exploitation readiness",
+            "Post-exploitation analysis",
+            "Reporting"
+          ].map((title, index) => ({
+            id: title.toLowerCase().replaceAll(" ", "-"),
+            title,
+            summary: `${title} summary`,
+            frameworkRefs: ["OWASP WSTG", "PTES", "OSSTMM"],
+            tools: [
+              {
+                id: `${index}-tool`,
+                label: `${title} tool`,
+                surface: "Tools",
+                command: "reference only",
+                input: "Input",
+                output: "Output",
+                tier: index === 3 ? "active" : "passive",
+                authorizationRequired: index === 3
+              }
+            ]
+          }))
+        }
+      });
+    }
+    if (channel === "methodology:export") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { filename: "reacher-methodology-coverage.csv", csv: "phase,tool\nReconnaissance,OSINT search" }
+      });
+    }
+    return createDefaultInvokeMock()(channel);
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/methodology-map"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByRole("button", { name: /Reconnaissance/ })).toBeInTheDocument();
+  expect(document.querySelectorAll(".methodology-connector")).toHaveLength(5);
+  await user.click(screen.getByRole("button", { name: /Exploitation readiness/ }));
+  expect(screen.getByText("Authorization")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Export coverage spreadsheet" }));
+
+  const invokedChannels = invokeMock.mock.calls.map(([channel]) => channel);
+  expect(invokedChannels.every((channel) => ["methodology:list", "methodology:export"].includes(channel))).toBe(true);
+  expect(invokedChannels).not.toEqual(expect.arrayContaining(["tools:launch", "scan:run", "analyzer:pcap:import"]));
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {
