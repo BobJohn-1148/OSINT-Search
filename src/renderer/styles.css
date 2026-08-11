@@ -478,6 +478,51 @@ select {
   gap: 12px;
 }
 
+.scan-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+}
+
+.scan-builder-panel,
+.scan-topology-panel,
+.scan-host-panel,
+.scan-output-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.scan-command-grid,
+.scan-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.scan-flow {
+  height: 420px;
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-app);
+}
+
+.scan-host-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  min-height: 54px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
+.scan-host-row .status-text {
+  grid-column: 1 / -1;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -770,6 +815,9 @@ select {
   .tools-command-grid,
   .tools-selected-row,
   .tools-edit-row,
+  .scan-layout,
+  .scan-command-grid,
+  .scan-toggle-grid,
   .case-command-row,
   .case-search-row,
   .report-command-row,

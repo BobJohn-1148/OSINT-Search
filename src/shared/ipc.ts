@@ -88,6 +88,14 @@ import {
   searchRunResponseSchema
 } from "./schemas/search.js";
 import {
+  scanGetRequestSchema,
+  scanGetResponseSchema,
+  scanRunRequestSchema,
+  scanRunResponseSchema,
+  scanTopologyRequestSchema,
+  scanTopologyResponseSchema
+} from "./schemas/scans.js";
+import {
   settingsGetRequestSchema,
   settingsGetResponseSchema,
   settingsSetRequestSchema,
@@ -467,6 +475,30 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists local tool target authorizations."
+  }),
+  "scan:run": defineChannel({
+    request: scanRunRequestSchema,
+    response: scanRunResponseSchema,
+    capability: "scans.run",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs an authorized nmap scan through the WSL launcher and persists parsed topology."
+  }),
+  "scan:get": defineChannel({
+    request: scanGetRequestSchema,
+    response: scanGetResponseSchema,
+    capability: "scans.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Reads one persisted nmap scan with parsed hosts and ports."
+  }),
+  "scan:topology": defineChannel({
+    request: scanTopologyRequestSchema,
+    response: scanTopologyResponseSchema,
+    capability: "scans.readTopology",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Builds deterministic topology for one persisted scan."
   })
 } as const;
 

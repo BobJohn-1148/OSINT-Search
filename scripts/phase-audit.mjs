@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 7;
+const MAX_PHASE = 8;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -234,6 +234,34 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("captures WSL tool output to a run so tool results can be saved to a case", "captured output is attachable");
   assertAnyTestIncludes("catalog add and edit persists", "catalog add edit persists");
   assertAnyTestIncludes("detect checks installed tools with fixed WSL which commands", "installed detection fixed argv");
+} else if (requestedPhase === 8) {
+  assertIncludes("src/main/scans/scan-service.ts", "buildNmapArgv", "nmap argv builder mechanism");
+  assertIncludes("src/main/scans/scan-service.ts", "validateCustomArgs", "custom argv target guard mechanism");
+  assertIncludes("src/main/scans/scan-service.ts", "\"-oX\"", "nmap XML stdout mechanism");
+  assertIncludes("src/main/scans/scan-service.ts", "findMatchingAuthorization", "exact target authorization mechanism");
+  assertIncludes("src/main/scans/nmap-parser.ts", "parseNmapXml", "nmap XML parser mechanism");
+  assertIncludes("src/main/scans/topology-layout.ts", "buildScanTopology", "deterministic topology mechanism");
+  assertIncludes("src/db/repositories/scans-repository.ts", "finishRun", "scan host and port persistence mechanism");
+  assertIncludes("src/main/reports/report-model.ts", "buildScanReportModel", "scan report model mechanism");
+  assertIncludes("src/main/reports/report-model.ts", "Service list", "scan service list report mechanism");
+  assertIncludes("src/main/reports/report-model.ts", "Address | Hostname | Status | Ports", "scan host table report mechanism");
+  assertIncludes("src/renderer/theme.css", "--xy-node-background-color-default", "React Flow theme token override");
+  assertIncludes("src/main/reports/report-service.ts", "generateScanReport", "scan report export mechanism");
+  assertIncludes("src/main/ipc/handlers/scan-handlers.ts", "scan:run", "scan run IPC handler");
+  assertIncludes("src/shared/ipc.ts", "scan:topology", "scan topology IPC channel");
+  assertIncludes("src/preload/preload.ts", "scan:output", "scan output event bridge");
+  assertIncludes("src/renderer/components/network-scan-view.tsx", "ReactFlow", "network scan topology renderer");
+  assertIncludes("src/db/migrations/012-scans.ts", "scans", "scans migration table");
+  assertIncludes("src/db/migrations/012-scans.ts", "hosts", "hosts migration table");
+  assertIncludes("src/db/migrations/012-scans.ts", "ports", "ports migration table");
+  assertAnyTestIncludes("parses nmap XML into hosts and ports", "parses nmap XML");
+  assertAnyTestIncludes("lays out topology deterministically for identical input", "deterministic topology layout");
+  assertAnyTestIncludes("network scan route renders topology nodes from scan results", "topology renders from scan result");
+  assertAnyTestIncludes("refuses an unauthorized scan", "unauthorized scan refused");
+  assertAnyTestIncludes("rejects custom nmap argv targets", "custom argv target guard");
+  assertAnyTestIncludes("allows only approved target-neutral custom nmap flags", "custom argv safe allowlist");
+  assertAnyTestIncludes("runs an authorized scan and captures parsed hosts", "authorized scan parses hosts");
+  assertAnyTestIncludes("export includes the topology host table and service list", "scan export includes topology host table service list");
 }
 
 if (process.exitCode) {

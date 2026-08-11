@@ -158,6 +158,45 @@ if (!preloadText.includes("tools:output")) {
   fail("preload is missing the allowed tools:output event bridge");
 }
 
+const scanServiceText = read(path.join(srcRoot, "main", "scans", "scan-service.ts"));
+for (const required of ["findMatchingAuthorization", "tier: \"active\"", "buildNmapArgv", "\"-oX\"", "\"-\"", "parseNmapXml", "auditRepository.record", "validateCustomArgs", "safeFlags", "approved target-neutral flags"]) {
+  if (!scanServiceText.includes(required)) {
+    fail(`scan service is missing ${required}`);
+  }
+}
+
+const scanParserText = read(path.join(srcRoot, "main", "scans", "nmap-parser.ts"));
+for (const required of ["XMLParser", "parseNmapXml", "ports", "hopDistance"]) {
+  if (!scanParserText.includes(required)) {
+    fail(`nmap parser is missing ${required}`);
+  }
+}
+
+const scanLayoutText = read(path.join(srcRoot, "main", "scans", "topology-layout.ts"));
+for (const required of ["buildScanTopology", "hashAddress", "Math.round"]) {
+  if (!scanLayoutText.includes(required)) {
+    fail(`scan topology layout is missing ${required}`);
+  }
+}
+
+const reportModelText = read(path.join(srcRoot, "main", "reports", "report-model.ts"));
+for (const required of ["buildScanReportModel", "Service list", "Address | Hostname | Status | Ports"]) {
+  if (!reportModelText.includes(required)) {
+    fail(`report model is missing ${required}`);
+  }
+}
+
+const themeText = read(path.join(rendererRoot, "theme.css"));
+for (const required of ["--xy-node-background-color-default", "--xy-edge-stroke-default", "--xy-background-color-default"]) {
+  if (!themeText.includes(required)) {
+    fail(`theme is missing React Flow token override ${required}`);
+  }
+}
+
+if (!preloadText.includes("scan:output")) {
+  fail("preload is missing the allowed scan:output event bridge");
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -166,4 +205,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 7 security invariants hold");
+console.log("PASS: Phase 8 security invariants hold");

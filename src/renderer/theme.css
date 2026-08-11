@@ -25,4 +25,16 @@
   --radius-control: 6px;
   --sidebar-expanded: 248px;
   --sidebar-collapsed: 76px;
+  --xy-node-background-color-default: var(--color-surface-raised);
+  --xy-node-color-default: var(--color-text);
+  --xy-node-border-default: 1px solid var(--color-accent-border);
+  --xy-edge-stroke-default: var(--color-accent);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--color-surface-raised);
+  --xy-controls-button-color-default: var(--color-text);
+  --xy-controls-button-color-hover-default: var(--color-accent-strong);
+  --xy-controls-button-border-color-default: var(--color-border);
+  --xy-background-color-default: var(--color-app);
+  --xy-background-pattern-dots-color-default: var(--color-border);
 }

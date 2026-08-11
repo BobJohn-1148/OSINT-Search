@@ -12,6 +12,7 @@ import { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repo
 import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
+import { ScansRepository } from "../../db/repositories/scans-repository.js";
 import { SettingsRepository } from "../../db/repositories/settings-repository.js";
 import { VaultRepository } from "../../db/repositories/vault-repository.js";
 import { SearchRepository } from "../../db/repositories/search-repository.js";
@@ -22,6 +23,7 @@ import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from ".
 import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
 import { ArchitectAgentService } from "../agents/architect-agent-service.js";
 import type { AgentRuntimeEvent } from "../../shared/schemas/agents-runtime.js";
+import type { ScanOutputEvent } from "../../shared/schemas/scans.js";
 import type { ToolOutputEvent } from "../../shared/schemas/tools.js";
 import { createArchitectAgentHandlers } from "./handlers/architect-agent-handlers.js";
 import { createAgentRuntimeHandlers } from "./handlers/agent-runtime-handlers.js";
@@ -31,6 +33,7 @@ import { createCasesHandlers } from "./handlers/cases-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createReportsHandlers } from "./handlers/reports-handlers.js";
+import { createScanHandlers } from "./handlers/scan-handlers.js";
 import { createSearchHandlers } from "./handlers/search-handlers.js";
 import { createSettingsHandlers } from "./handlers/settings-handlers.js";
 import { createSystemHandlers } from "./handlers/system-handlers.js";
@@ -39,6 +42,7 @@ import { executeIpcHandler } from "./transport.js";
 import { createDocxRenderer } from "../reports/docx-renderer.js";
 import { createPdfRenderer } from "../reports/pdf-renderer.js";
 import { ReportService } from "../reports/report-service.js";
+import { ScanService } from "../scans/scan-service.js";
 import { ToolsService } from "../tools/tools-service.js";
 import { WslToolLauncher } from "../tools/wsl-launcher.js";
 
@@ -54,10 +58,12 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const agentRuntimeRepository = new AgentRuntimeRepository(db);
   const casesRepository = new CasesRepository(db);
   const reportsRepository = new ReportsRepository(db);
+  const scansRepository = new ScansRepository(db);
   const searchRepository = new SearchRepository(db);
   const settingsRepository = new SettingsRepository(db);
   const toolsRepository = new ToolsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
+  const wslToolLauncher = new WslToolLauncher();
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("agent:events", { events });
@@ -80,9 +86,15 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     toolsRepository,
     casesRepository,
     auditRepository,
-    new WslToolLauncher(),
+    wslToolLauncher,
     emitToolOutput
   );
+  const emitScanOutput = (event: ScanOutputEvent): void => {
+    for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
+      webContents.send("scan:output", event);
+    }
+  };
+  const scanService = new ScanService(scansRepository, toolsRepository, auditRepository, wslToolLauncher, emitScanOutput);
   const architectAgentService = new ArchitectAgentService(
     agentsRepository,
     agentRuntimeRepository,
@@ -109,6 +121,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     casesRepository,
     reportsRepository,
     auditRepository,
+    scansRepository,
     { pdf: createPdfRenderer(), docx: createDocxRenderer() },
     path.join(app.getPath("userData"), "reports")
   );
@@ -118,6 +131,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createAuditHandlers(auditRepository),
     ...createCasesHandlers(casesRepository),
     ...createReportsHandlers(reportService, reportsRepository, (filePath) => shell.openPath(filePath)),
+    ...createScanHandlers(scanService),
     ...createKeysHandlers(vaultRepository, auditRepository),
     ...createProvidersHandlers(vaultRepository),
     ...createAgentsHandlers(agentsRepository),

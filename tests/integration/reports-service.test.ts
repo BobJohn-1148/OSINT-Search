@@ -11,6 +11,7 @@ import { runMigrations } from "../../src/db/migrations/runner";
 import { AuditRepository } from "../../src/db/repositories/audit-repository";
 import { CasesRepository } from "../../src/db/repositories/cases-repository";
 import { ReportsRepository } from "../../src/db/repositories/reports-repository";
+import { ScansRepository } from "../../src/db/repositories/scans-repository";
 import type { ReportDocumentModel } from "../../src/main/reports/report-model";
 import type { ReportRenderer } from "../../src/main/reports/report-renderer";
 import { ReportService } from "../../src/main/reports/report-service";
@@ -20,6 +21,7 @@ function createHarness() {
   runMigrations(db);
   const casesRepository = new CasesRepository(db);
   const reportsRepository = new ReportsRepository(db);
+  const scansRepository = new ScansRepository(db);
   const auditRepository = new AuditRepository(db);
   const outputDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "reacher-reports-"));
   const renderedModels: ReportDocumentModel[] = [];
@@ -33,11 +35,12 @@ function createHarness() {
     casesRepository,
     reportsRepository,
     auditRepository,
+    scansRepository,
     { pdf: renderer, docx: renderer },
     outputDirectory,
     () => new Date("2026-08-10T12:00:00.000Z")
   );
-  return { casesRepository, reportsRepository, auditRepository, service, renderedModels };
+  return { casesRepository, reportsRepository, auditRepository, scansRepository, service, renderedModels };
 }
 
 function seedCase(casesRepository: CasesRepository) {

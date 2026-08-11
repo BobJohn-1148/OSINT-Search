@@ -77,6 +77,9 @@ function createDefaultInvokeMock() {
     if (channel === "auth:list") {
       return Promise.resolve({ ok: true as const, value: { authorizations: [] } });
     }
+    if (channel === "scan:topology") {
+      return Promise.resolve({ ok: true as const, value: { topology: { scanId: "scan-one", nodes: [], edges: [] } } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -117,11 +120,15 @@ beforeEach(() => {
         "catalog:add",
         "catalog:update",
         "auth:create",
-        "auth:list"
+        "auth:list",
+        "scan:run",
+        "scan:get",
+        "scan:topology"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
       onAgentEvent: vi.fn().mockReturnValue(() => {}),
       onToolEvent: vi.fn().mockReturnValue(() => {}),
+      onScanEvent: vi.fn().mockReturnValue(() => {}),
       invoke: invokeMock
     }
   });
@@ -148,6 +155,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument();
     } else if (route.id === "tools") {
       expect(await screen.findByRole("button", { name: "Launch tool" })).toBeInTheDocument();
+    } else if (route.id === "network-scan") {
+      expect(screen.getByRole("button", { name: "Run scan" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -463,6 +472,77 @@ it("reports route generates a PDF from a selected case so exports are reachable 
     expect(invokeMock).toHaveBeenCalledWith("report:generate", { caseId: "case-one", format: "pdf" });
   });
   expect(await screen.findByText("Generated PDF report")).toBeInTheDocument();
+});
+
+it("network scan route renders topology nodes from scan results so parsed hosts are visible", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "scan:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          scan: {
+            id: "scan-one",
+            target: "192.168.1.0/24",
+            wslDistro: "Ubuntu",
+            status: "succeeded",
+            scanType: "quick-top-100",
+            timing: "T3",
+            argv: ["nmap", "-oX", "-", "-T3", "192.168.1.0/24"],
+            stdout: "<nmaprun />",
+            stderr: "",
+            startedTs: "2026-08-10T10:00:00.000Z",
+            completedTs: "2026-08-10T10:00:01.000Z",
+            authorizationId: "auth-one"
+          },
+          hosts: [
+            {
+              id: "host-one",
+              scanId: "scan-one",
+              address: "192.168.1.10",
+              hostname: "workstation.local",
+              status: "up",
+              hopDistance: 1,
+              ports: [
+                {
+                  id: "port-one",
+                  scanId: "scan-one",
+                  hostId: "host-one",
+                  protocol: "tcp",
+                  port: 443,
+                  state: "open",
+                  service: "https",
+                  product: "nginx",
+                  version: "1.25"
+                }
+              ]
+            }
+          ],
+          topology: {
+            scanId: "scan-one",
+            nodes: [
+              { id: "target", label: "192.168.1.0/24", x: 0, y: 0, ring: 0 },
+              { id: "host-one", label: "workstation.local (192.168.1.10)", x: 120, y: 40, ring: 1 }
+            ],
+            edges: [{ id: "target-host-one", source: "target", target: "host-one" }]
+          }
+        }
+      });
+    }
+
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/network-scan"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Run scan" }));
+
+  expect(await screen.findByText("workstation.local (192.168.1.10)")).toBeInTheDocument();
+  expect(screen.getByText("443/tcp https")).toBeInTheDocument();
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {

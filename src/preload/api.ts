@@ -6,6 +6,7 @@
 import type { IpcChannel, IpcRequest, IpcResponse } from "../shared/ipc.js";
 import type { Result } from "../shared/result.js";
 import type { AgentRuntimeEventBatch } from "../shared/schemas/agents-runtime.js";
+import type { ScanOutputEvent } from "../shared/schemas/scans.js";
 import type { ToolOutputEvent } from "../shared/schemas/tools.js";
 import type { Observation, SourceStatus } from "../shared/types/search.js";
 
@@ -20,6 +21,10 @@ export interface AgentEventMap {
 
 export interface ToolEventMap {
   readonly "tools:output": ToolOutputEvent;
+}
+
+export interface ScanEventMap {
+  readonly "scan:output": ScanOutputEvent;
 }
 
 export interface ReacherBridge {
@@ -39,6 +44,10 @@ export interface ReacherBridge {
   onToolEvent<TEvent extends keyof ToolEventMap>(
     event: TEvent,
     listener: (payload: ToolEventMap[TEvent]) => void
+  ): () => void;
+  onScanEvent<TEvent extends keyof ScanEventMap>(
+    event: TEvent,
+    listener: (payload: ScanEventMap[TEvent]) => void
   ): () => void;
 }
 

@@ -10,6 +10,7 @@ import { Route, Routes } from "react-router-dom";
 import { AgentsView } from "./components/agents-view";
 import { CasesView } from "./components/cases-view";
 import { ReportsView } from "./components/reports-view";
+import { NetworkScanView } from "./components/network-scan-view";
 import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
 import { SearchView } from "./components/search-view";
@@ -49,6 +50,8 @@ export function AppFrame() {
                   <AgentsView />
                 ) : route.id === "tools" ? (
                   <ToolsView />
+                ) : route.id === "network-scan" ? (
+                  <NetworkScanView />
                 ) : (
                   <RouteStub route={route} />
                 )

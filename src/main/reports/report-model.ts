@@ -4,6 +4,7 @@
  * one export could silently omit a citation the other kept.
  */
 import type { CaseItem, CaseRecord, CaseSummary } from "../../shared/schemas/cases.js";
+import type { ScanHost, ScanRecord, ScanTopology } from "../../shared/schemas/scans.js";
 
 export interface ReportCitation {
   readonly id: string;
@@ -67,6 +68,64 @@ export function buildCaseReportModel(input: {
       }
     ]
   };
+}
+
+export function buildScanReportModel(input: {
+  readonly scan: ScanRecord;
+  readonly hosts: readonly ScanHost[];
+  readonly topology: ScanTopology;
+  readonly generatedTs: string;
+}): ReportDocumentModel {
+  const findings = input.hosts.flatMap((host, index) =>
+    host.ports.map((port) => ({
+      id: `${host.id}-${port.id}`,
+      title: `${host.address}:${port.port}/${port.protocol}`,
+      text: `${port.state} ${port.service}${port.product ? ` ${port.product}` : ""}${port.version ? ` ${port.version}` : ""}`.trim(),
+      itemType: "scan",
+      sourceTs: input.scan.completedTs ?? input.scan.startedTs,
+      citations: [{ id: `N${index + 1}`, label: `nmap - ${input.scan.id}` }]
+    }))
+  );
+
+  return {
+    title: `Reacher scan report: ${input.scan.target}`,
+    subtitle: `Scan ${input.scan.id} - ${input.scan.status}`,
+    generatedTs: input.generatedTs,
+    summaryLines: [
+      `target: ${input.scan.target}`,
+      `hosts: ${input.hosts.length}`,
+      `open ports: ${input.hosts.reduce((count, host) => count + host.ports.filter((port) => port.state === "open").length, 0)}`
+    ],
+    findings,
+    sections: [
+      {
+        title: "Scans and topology",
+        lines: input.topology.nodes.map((node) => `${node.label}: ring ${node.ring}, x ${node.x}, y ${node.y}`)
+      },
+      {
+        title: "Host list",
+        lines: buildScanHostLines(input.hosts)
+      },
+      {
+        title: "Service list",
+        lines: buildScanServiceLines(input.hosts)
+      }
+    ]
+  };
+}
+
+function buildScanHostLines(hosts: readonly ScanHost[]): string[] {
+  if (hosts.length === 0) {
+    return ["No hosts were parsed from this scan."];
+  }
+  return ["Address | Hostname | Status | Ports", ...hosts.map((host) => `${host.address} | ${host.hostname ?? "no hostname"} | ${host.status} | ${host.ports.length}`)];
+}
+
+function buildScanServiceLines(hosts: readonly ScanHost[]): string[] {
+  const services = hosts.flatMap((host) =>
+    host.ports.map((port) => `${host.address} | ${port.port}/${port.protocol} | ${port.state} | ${port.service || "unknown"} | ${port.product || "unknown"} ${port.version}`.trim())
+  );
+  return services.length > 0 ? ["Host | Port | State | Service | Product", ...services] : ["No services were parsed from this scan."];
 }
 
 function buildSummaryLines(summary: CaseSummary): string[] {
