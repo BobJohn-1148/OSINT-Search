@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 6;
+const MAX_PHASE = 7;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -199,6 +199,41 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("rejects symlink escapes outside the project", "architect repo-read symlink escape rejection");
   assertAnyTestIncludes("rejects apply symlink escapes outside the project", "architect apply symlink escape rejection");
   assertAnyTestIncludes("rejects apply ancestor symlink escapes before mkdir", "architect apply ancestor symlink escape rejection");
+} else if (requestedPhase === 7) {
+  assertIncludes("src/main/tools/wsl-launcher.ts", "buildWslInvocation", "fixed WSL argv launcher mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", "shell: false", "launcher disables shell mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", "maxConcurrentProcesses", "bounded WSL process queue mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", "processTimeoutMs", "WSL timeout mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", "cancel(runId", "WSL cancel mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", "killWindowsProcessTree", "process tree kill mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", ".pause()", "stream pause backpressure mechanism");
+  assertIncludes("src/main/tools/wsl-launcher.ts", ".resume()", "stream resume backpressure mechanism");
+  assertIncludes("src/main/tools/tools-service.ts", "tool.tier === \"active\"", "active tier gate mechanism");
+  assertIncludes("src/main/tools/tools-service.ts", "requireAuthorization", "exact authorization lookup mechanism");
+  assertIncludes("src/main/tools/tools-service.ts", "casesRepository.addItem", "tool output save-to-case mechanism");
+  assertIncludes("src/db/repositories/tools-repository.ts", "finishRun", "captured output persistence mechanism");
+  assertIncludes("src/db/repositories/tools-repository.ts", "addCatalog", "catalog add mechanism");
+  assertIncludes("src/db/repositories/tools-repository.ts", "updateCatalog", "catalog edit mechanism");
+  assertIncludes("src/main/ipc/handlers/tools-handlers.ts", "tools:launch", "tools launch IPC handler");
+  assertIncludes("src/shared/ipc.ts", "tools:launch", "tools launch IPC channel");
+  assertIncludes("src/preload/preload.ts", "tools:output", "tool output event bridge");
+  assertIncludes("src/renderer/components/tools-view.tsx", "Launch tool", "tools route launch surface");
+  assertIncludes("src/db/migrations/011-tools.ts", "tool_catalog", "tools migration catalog table");
+  assertIncludes("src/db/migrations/011-tools.ts", "authorizations", "tools migration authorizations table");
+  assertIncludes("src/db/migrations/011-tools.ts", "tool_runs", "tools migration runs table");
+  assertAnyTestIncludes("launcher builds a fixed argv and never invokes a shell", "fixed argv and no shell");
+  assertAnyTestIncludes("launcher queues WSL processes", "bounded WSL process queue");
+  assertAnyTestIncludes("launcher cancels queued WSL processes before they spawn", "queued WSL cancel");
+  assertAnyTestIncludes("launcher does not spawn when an abort signal is already canceled", "pre-aborted WSL launch");
+  assertAnyTestIncludes("launcher times out and kills the process tree", "WSL timeout process-tree kill");
+  assertAnyTestIncludes("launcher cancel kills the process tree", "WSL cancel process-tree kill");
+  assertAnyTestIncludes("launcher caps multibyte output by bytes and pauses and resumes fast streams", "byte output cap and stream backpressure");
+  assertAnyTestIncludes("an active tool is blocked without a matching authorization", "active gate blocks without auth");
+  assertAnyTestIncludes("wrong-target and expired active authorizations are blocked", "active gate rejects wrong or expired auth");
+  assertAnyTestIncludes("an exact unexpired active authorization permits", "active gate permits exact unexpired auth");
+  assertAnyTestIncludes("captures WSL tool output to a run so tool results can be saved to a case", "captured output is attachable");
+  assertAnyTestIncludes("catalog add and edit persists", "catalog add edit persists");
+  assertAnyTestIncludes("detect checks installed tools with fixed WSL which commands", "installed detection fixed argv");
 }
 
 if (process.exitCode) {

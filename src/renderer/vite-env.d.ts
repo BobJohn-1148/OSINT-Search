@@ -1,6 +1,7 @@
 import type { IpcChannel, IpcRequest, IpcResponse } from "../shared/ipc";
 import type { Result } from "../shared/result";
 import type { AgentRuntimeEventBatch } from "../shared/schemas/agents-runtime";
+import type { ToolOutputEvent } from "../shared/schemas/tools";
 import type { Observation, SourceStatus } from "../shared/types/search";
 
 interface SearchEventMap {
@@ -10,6 +11,10 @@ interface SearchEventMap {
 
 interface AgentEventMap {
   readonly "agent:events": AgentRuntimeEventBatch;
+}
+
+interface ToolEventMap {
+  readonly "tools:output": ToolOutputEvent;
 }
 
 declare global {
@@ -27,6 +32,10 @@ declare global {
       onAgentEvent<TEvent extends keyof AgentEventMap>(
         event: TEvent,
         listener: (payload: AgentEventMap[TEvent]) => void
+      ): () => void;
+      onToolEvent<TEvent extends keyof ToolEventMap>(
+        event: TEvent,
+        listener: (payload: ToolEventMap[TEvent]) => void
       ): () => void;
     };
   }

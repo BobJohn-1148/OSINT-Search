@@ -15,12 +15,14 @@ import { ReportsRepository } from "../../db/repositories/reports-repository.js";
 import { SettingsRepository } from "../../db/repositories/settings-repository.js";
 import { VaultRepository } from "../../db/repositories/vault-repository.js";
 import { SearchRepository } from "../../db/repositories/search-repository.js";
+import { ToolsRepository } from "../../db/repositories/tools-repository.js";
 import type { VaultCrypto } from "../security/vault-crypto.js";
 import { searchConnectors } from "../search/connectors/index.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
 import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
 import { ArchitectAgentService } from "../agents/architect-agent-service.js";
 import type { AgentRuntimeEvent } from "../../shared/schemas/agents-runtime.js";
+import type { ToolOutputEvent } from "../../shared/schemas/tools.js";
 import { createArchitectAgentHandlers } from "./handlers/architect-agent-handlers.js";
 import { createAgentRuntimeHandlers } from "./handlers/agent-runtime-handlers.js";
 import { createAgentsHandlers } from "./handlers/agents-handlers.js";
@@ -32,10 +34,13 @@ import { createReportsHandlers } from "./handlers/reports-handlers.js";
 import { createSearchHandlers } from "./handlers/search-handlers.js";
 import { createSettingsHandlers } from "./handlers/settings-handlers.js";
 import { createSystemHandlers } from "./handlers/system-handlers.js";
+import { createToolsHandlers } from "./handlers/tools-handlers.js";
 import { executeIpcHandler } from "./transport.js";
 import { createDocxRenderer } from "../reports/docx-renderer.js";
 import { createPdfRenderer } from "../reports/pdf-renderer.js";
 import { ReportService } from "../reports/report-service.js";
+import { ToolsService } from "../tools/tools-service.js";
+import { WslToolLauncher } from "../tools/wsl-launcher.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -51,6 +56,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const reportsRepository = new ReportsRepository(db);
   const searchRepository = new SearchRepository(db);
   const settingsRepository = new SettingsRepository(db);
+  const toolsRepository = new ToolsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
@@ -64,6 +70,18 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     auditRepository,
     emitAgentEvents,
     app.getAppPath()
+  );
+  const emitToolOutput = (event: ToolOutputEvent): void => {
+    for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
+      webContents.send("tools:output", event);
+    }
+  };
+  const toolsService = new ToolsService(
+    toolsRepository,
+    casesRepository,
+    auditRepository,
+    new WslToolLauncher(),
+    emitToolOutput
   );
   const architectAgentService = new ArchitectAgentService(
     agentsRepository,
@@ -105,6 +123,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createAgentsHandlers(agentsRepository),
     ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
     ...createArchitectAgentHandlers(architectAgentService),
+    ...createToolsHandlers(toolsService),
     ...createSearchHandlers(
       searchRepository,
       auditRepository,

@@ -55,6 +55,28 @@ function createDefaultInvokeMock() {
     if (channel === "report:list") {
       return Promise.resolve({ ok: true as const, value: { reports: [] } });
     }
+    if (channel === "tools:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          tools: [
+            {
+              id: "sherlock",
+              name: "Sherlock",
+              description: "Username lookup across public social sites.",
+              installCommand: "pipx install sherlock-project",
+              officialLink: "https://github.com/sherlock-project/sherlock",
+              category: "username",
+              tier: "passive",
+              defaultArgs: ["sherlock"]
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "auth:list") {
+      return Promise.resolve({ ok: true as const, value: { authorizations: [] } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -88,16 +110,24 @@ beforeEach(() => {
         "case:summary",
         "report:generate",
         "report:list",
-        "report:open"
+        "report:open",
+        "tools:list",
+        "tools:detect",
+        "tools:launch",
+        "catalog:add",
+        "catalog:update",
+        "auth:create",
+        "auth:list"
       ],
       onSearchEvent: vi.fn().mockReturnValue(() => {}),
       onAgentEvent: vi.fn().mockReturnValue(() => {}),
+      onToolEvent: vi.fn().mockReturnValue(() => {}),
       invoke: invokeMock
     }
   });
 });
 
-it("renders every stub route and the settings route so the app boots and navigates across all surfaces", () => {
+it("renders every stub route and the settings route so the app boots and navigates across all surfaces", async () => {
   for (const route of navigationRoutes) {
     const { unmount } = render(
       <MemoryRouter initialEntries={[route.path]}>
@@ -116,6 +146,8 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Generate report" })).toBeInTheDocument();
     } else if (route.id === "ai-agents") {
       expect(screen.getByRole("button", { name: "Open chat" })).toBeInTheDocument();
+    } else if (route.id === "tools") {
+      expect(await screen.findByRole("button", { name: "Launch tool" })).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }

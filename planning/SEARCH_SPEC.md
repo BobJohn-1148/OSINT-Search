@@ -20,8 +20,7 @@ one merged, scored profile out.
 ## Cross-reference + strength
 - When the same data point returns from multiple sources it is linked and marked
   (e.g. `⇄ 3×`).
-- A strength/likeliness meter scores each corroborated entity by independent
-  source count: 1 = single-source, 2 = likely, 3 = strong, 4+ = confirmed.
+- A strength/likeliness meter scores each corroborated entity by independent source count: 1 = single-source, 2 = likely, 3 = strong, 4+ = confirmed.
 - Score is computed from corroboration, never typed by a human or the model.
 
 ## Actions

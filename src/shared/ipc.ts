@@ -97,6 +97,22 @@ import {
   systemPingRequestSchema,
   systemPingResponseSchema
 } from "./schemas/system.js";
+import {
+  authCreateRequestSchema,
+  authCreateResponseSchema,
+  authListRequestSchema,
+  authListResponseSchema,
+  catalogAddRequestSchema,
+  catalogAddResponseSchema,
+  catalogUpdateRequestSchema,
+  catalogUpdateResponseSchema,
+  toolsDetectRequestSchema,
+  toolsDetectResponseSchema,
+  toolsLaunchRequestSchema,
+  toolsLaunchResponseSchema,
+  toolsListRequestSchema,
+  toolsListResponseSchema
+} from "./schemas/tools.js";
 
 export type IpcSensitivity = "low" | "medium" | "high" | "sensitive";
 
@@ -395,6 +411,62 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Opens one generated report by local report id."
+  }),
+  "tools:list": defineChannel({
+    request: toolsListRequestSchema,
+    response: toolsListResponseSchema,
+    capability: "tools.readCatalog",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists locally configured WSL tools."
+  }),
+  "tools:detect": defineChannel({
+    request: toolsDetectRequestSchema,
+    response: toolsDetectResponseSchema,
+    capability: "tools.detect",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Checks WSL for installed tool executables using fixed argv."
+  }),
+  "tools:launch": defineChannel({
+    request: toolsLaunchRequestSchema,
+    response: toolsLaunchResponseSchema,
+    capability: "tools.launch",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Launches one WSL tool, captures output, and applies the active authorization gate."
+  }),
+  "catalog:add": defineChannel({
+    request: catalogAddRequestSchema,
+    response: catalogAddResponseSchema,
+    capability: "tools.writeCatalog",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Adds one local WSL tool catalog entry."
+  }),
+  "catalog:update": defineChannel({
+    request: catalogUpdateRequestSchema,
+    response: catalogUpdateResponseSchema,
+    capability: "tools.writeCatalog",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Updates one local WSL tool catalog entry."
+  }),
+  "auth:create": defineChannel({
+    request: authCreateRequestSchema,
+    response: authCreateResponseSchema,
+    capability: "tools.authorize",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Creates an exact-target authorization for an active tool tier."
+  }),
+  "auth:list": defineChannel({
+    request: authListRequestSchema,
+    response: authListResponseSchema,
+    capability: "tools.readAuthorizations",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists local tool target authorizations."
   })
 } as const;
 

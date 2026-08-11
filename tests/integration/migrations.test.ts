@@ -30,7 +30,8 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 7, name: "cases" },
     { id: 8, name: "reports" },
     { id: 9, name: "agents-runtime" },
-    { id: 10, name: "architect-agent" }
+    { id: 10, name: "architect-agent" },
+    { id: 11, name: "tools-wsl" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -44,6 +45,13 @@ it("migration runner applies migrations and is idempotent on second run", () => 
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'reports'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_runs'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_memory'").get()).toBeTruthy();
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tool_catalog'").get()).toBeTruthy();
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'tool_runs'").get()).toBeTruthy();
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'authorizations'").get()).toBeTruthy();
+  expect(db.prepare("SELECT COUNT(*) AS count FROM tool_catalog").get()).toEqual({ count: 11 });
+  expect(db.prepare("SELECT install_command FROM tool_catalog WHERE id = 'reconftw'").get()).toEqual({
+    install_command: "git clone https://github.com/six2dez/reconftw && cd reconftw && ./install.sh"
+  });
 });
 
 it("an audit_events row cannot be updated or deleted because history is append-only", () => {

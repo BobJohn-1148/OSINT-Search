@@ -379,6 +379,105 @@ select {
   gap: 18px;
 }
 
+.tools-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(0, 1.1fr);
+  gap: 18px;
+}
+
+.tools-command-panel,
+.tools-output-panel,
+.tools-catalog-panel,
+.tools-edit-panel,
+.tools-auth-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.tools-command-grid {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
+.tools-selected-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 12px;
+}
+
+.tools-output {
+  min-height: 260px;
+  max-height: 520px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-app);
+  color: var(--color-accent-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.tool-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.tool-auth-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  min-height: 54px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-transparent);
+  color: var(--color-text);
+  padding: 10px;
+  text-align: left;
+}
+
+.tool-list-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px;
+  align-items: center;
+  min-height: 54px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-transparent);
+  color: var(--color-text);
+  padding: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tool-list-button:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-raised);
+}
+
+.tool-list-button .status-text,
+.tool-auth-row .status-text {
+  grid-column: 1 / -1;
+}
+
+.tools-edit-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr);
+  gap: 12px;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -667,6 +766,10 @@ select {
   .settings-grid,
   .search-command-row,
   .search-layout,
+  .tools-layout,
+  .tools-command-grid,
+  .tools-selected-row,
+  .tools-edit-row,
   .case-command-row,
   .case-search-row,
   .report-command-row,

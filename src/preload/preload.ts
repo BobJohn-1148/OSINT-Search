@@ -5,7 +5,7 @@
  */
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type IpcChannel } from "../shared/ipc.js";
-import type { AgentEventMap, ReacherBridge, SearchEventMap } from "./api.js";
+import type { AgentEventMap, ReacherBridge, SearchEventMap, ToolEventMap } from "./api.js";
 
 const channels = Object.keys(IPC) as IpcChannel[];
 
@@ -41,6 +41,16 @@ const bridge: ReacherBridge = {
     }
 
     const wrapped = (_ipcEvent: Electron.IpcRendererEvent, payload: AgentEventMap[typeof event]) => listener(payload);
+    ipcRenderer.on(event, wrapped);
+    return () => ipcRenderer.removeListener(event, wrapped);
+  },
+  onToolEvent: (event, listener) => {
+    const allowedEvents: readonly (keyof ToolEventMap)[] = ["tools:output"];
+    if (!allowedEvents.includes(event)) {
+      return () => {};
+    }
+
+    const wrapped = (_ipcEvent: Electron.IpcRendererEvent, payload: ToolEventMap[typeof event]) => listener(payload);
     ipcRenderer.on(event, wrapped);
     return () => ipcRenderer.removeListener(event, wrapped);
   }

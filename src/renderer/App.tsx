@@ -14,6 +14,7 @@ import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
 import { SearchView } from "./components/search-view";
 import { SettingsView } from "./components/settings-view";
+import { ToolsView } from "./components/tools-view";
 import { RouteStub } from "./components/route-stub";
 import { fallbackRoute, navigationRoutes } from "./navigation";
 
@@ -46,6 +47,8 @@ export function AppFrame() {
                   <ReportsView />
                 ) : route.id === "ai-agents" ? (
                   <AgentsView />
+                ) : route.id === "tools" ? (
+                  <ToolsView />
                 ) : (
                   <RouteStub route={route} />
                 )

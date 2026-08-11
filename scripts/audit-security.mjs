@@ -132,6 +132,32 @@ for (const required of ["realpathSync.native", "path.relative", "outside the Rea
   }
 }
 
+const toolsServiceText = read(path.join(srcRoot, "main", "tools", "tools-service.ts"));
+for (const required of ["requireAuthorization", "tool.tier === \"active\"", "tool.launch.blocked", "casesRepository.addItem", "auditRepository.record"]) {
+  if (!toolsServiceText.includes(required)) {
+    fail(`tools service is missing ${required}`);
+  }
+}
+
+const toolsLauncherText = read(path.join(srcRoot, "main", "tools", "wsl-launcher.ts"));
+for (const required of ["wsl.exe", "\"-d\"", "\"--\"", "shell: false", "spawnProcess", "maxConcurrentProcesses", "processTimeoutMs", "cancel(runId", "queuedCancels", "signal?.aborted", "killWindowsProcessTree", "taskkill.exe", ".pause()", ".resume()"]) {
+  if (!toolsLauncherText.includes(required)) {
+    fail(`WSL launcher is missing ${required}`);
+  }
+}
+
+const toolsRepositoryText = read(path.join(srcRoot, "db", "repositories", "tools-repository.ts"));
+for (const required of ["findMatchingAuthorization", "createRun", "finishRun", "tool_catalog", "authorizations", "tool_runs"]) {
+  if (!toolsRepositoryText.includes(required)) {
+    fail(`tools repository is missing ${required}`);
+  }
+}
+
+const preloadText = read(path.join(srcRoot, "preload", "preload.ts"));
+if (!preloadText.includes("tools:output")) {
+  fail("preload is missing the allowed tools:output event bridge");
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -140,4 +166,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 6 security invariants hold");
+console.log("PASS: Phase 7 security invariants hold");
