@@ -13,7 +13,9 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  Smartphone,
   TerminalSquare,
+  Users,
   Wrench
 } from "lucide-react";
 import type { LucideProps } from "lucide-react";
@@ -76,6 +78,20 @@ export const navigationRoutes: readonly NavigationRoute[] = [
     label: "Analyzers",
     summary: "Imported event logs, packet captures, dorks, MACs, and vulnerabilities will be parsed here.",
     Icon: TerminalSquare
+  },
+  {
+    id: "mobile",
+    path: "/mobile",
+    label: "Mobile",
+    summary: "Trusted Android and Apple devices can be inventoried from local USB tooling.",
+    Icon: Smartphone
+  },
+  {
+    id: "social-analyzer",
+    path: "/social-analyzer",
+    label: "Social analyzer",
+    summary: "Public username candidates across hundreds of networks can be prepared for verification.",
+    Icon: Users
   },
   {
     id: "reports",

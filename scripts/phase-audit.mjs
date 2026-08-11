@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 12;
+const MAX_PHASE = 13;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -371,6 +371,28 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("package.json", "reacher-icon.ico", "Reacher icon package mechanism");
   assertIncludes("scripts/package-smoke.mjs", "electron-builder", "packaging smoke script mechanism");
   assertAnyTestIncludes("packaging smoke test verifies electron-builder config", "packaging smoke test");
+} else if (requestedPhase === 13) {
+  assertIncludes("src/db/migrations/016-tools-mobile-social.ts", "nuclei", "ProjectDiscovery catalog mechanism");
+  assertIncludes("src/db/migrations/016-tools-mobile-social.ts", "Metasploit Framework", "gated exploitation catalog mechanism");
+  assertIncludes("src/db/migrations/016-tools-mobile-social.ts", "juice-shop-lab", "practice target lab mechanism");
+  assertIncludes("src/db/migrations/016-tools-mobile-social.ts", "mobile_device_snapshots", "mobile snapshot schema mechanism");
+  assertIncludes("src/shared/types/tools.ts", "\"wireless\"", "expanded tool category type mechanism");
+  assertAnyTestIncludes("nuclei", "expanded catalog includes requested tools");
+  assertAnyTestIncludes("juice-shop-lab", "practice lab catalog entry");
+
+  assertIncludes("src/main/mobile/mobile-service.ts", "execFile", "main-owned mobile command mechanism");
+  assertIncludes("src/main/mobile/mobile-service.ts", "shell: false", "mobile probes use shell false");
+  assertIncludes("src/main/ipc/handlers/mobile-handlers.ts", "mobile:detect", "mobile IPC handler mechanism");
+  assertIncludes("src/shared/ipc.ts", "mobile:profiles", "mobile IPC channel mechanism");
+  assertIncludes("src/renderer/components/mobile-view.tsx", "Detect mobile devices", "mobile route surface mechanism");
+  assertAnyTestIncludes("detects Android and iOS devices through fixed local probes", "mobile fixed probe behavior");
+  assertAnyTestIncludes("reports missing mobile tools without crashing", "mobile missing tools fallback");
+
+  assertIncludes("src/main/social/social-network-catalog.generated.ts", "Generated from WebBreacher WhatsMyName", "offline social catalog mechanism");
+  assertIncludes("src/main/social/social-analyzer-service.ts", "status: \"candidate\"", "candidate-only social analyzer mechanism");
+  assertIncludes("src/main/ipc/handlers/social-handlers.ts", "social:analyze", "social IPC handler mechanism");
+  assertIncludes("src/renderer/components/social-analyzer-view.tsx", "Social analyzer", "social analyzer route surface");
+  assertAnyTestIncludes("more than three hundred networks without marking them verified", "social analyzer broad candidate test");
 }
 
 if (process.exitCode) {

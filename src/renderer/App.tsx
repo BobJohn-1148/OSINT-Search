@@ -12,12 +12,14 @@ import { AnalyzersView } from "./components/analyzers-view";
 import { AuditLogView } from "./components/audit-log-view";
 import { CasesView } from "./components/cases-view";
 import { DashboardView } from "./components/dashboard-view";
+import { MobileView } from "./components/mobile-view";
 import { ReportsView } from "./components/reports-view";
 import { NetworkScanView } from "./components/network-scan-view";
 import { Sidebar } from "./components/sidebar";
 import { readStoredSidebarState, writeStoredSidebarState } from "./components/sidebar-state";
 import { SearchView } from "./components/search-view";
 import { SettingsView } from "./components/settings-view";
+import { SocialAnalyzerView } from "./components/social-analyzer-view";
 import { ToolsView } from "./components/tools-view";
 import { RouteStub } from "./components/route-stub";
 import { fallbackRoute, navigationRoutes } from "./navigation";
@@ -59,6 +61,10 @@ export function AppFrame() {
                   <NetworkScanView />
                 ) : route.id === "analyzers" ? (
                   <AnalyzersView />
+                ) : route.id === "mobile" ? (
+                  <MobileView />
+                ) : route.id === "social-analyzer" ? (
+                  <SocialAnalyzerView />
                 ) : route.id === "audit-log" ? (
                   <AuditLogView />
                 ) : (

@@ -5,7 +5,27 @@
  * authorization.
  */
 export const toolTierValues = ["passive", "active"] as const;
-export const toolCategoryValues = ["recon", "username", "email", "phone", "crawler", "network", "packet", "framework"] as const;
+export const toolCategoryValues = [
+  "recon",
+  "username",
+  "email",
+  "phone",
+  "crawler",
+  "network",
+  "packet",
+  "framework",
+  "web",
+  "exploitation",
+  "cracking",
+  "forensics",
+  "reverse-engineering",
+  "privilege",
+  "cloud",
+  "wireless",
+  "lab",
+  "mobile",
+  "social"
+] as const;
 export const toolRunStatusValues = ["queued", "running", "succeeded", "failed", "blocked"] as const;
 
 export type ToolTier = (typeof toolTierValues)[number];

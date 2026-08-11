@@ -672,6 +672,47 @@ select {
   overflow-wrap: anywhere;
 }
 
+.mobile-layout,
+.social-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 18px;
+}
+
+.mobile-panel,
+.social-panel,
+.social-command-panel {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.social-command-panel {
+  grid-template-columns: minmax(180px, 320px) auto minmax(0, 1fr);
+  align-items: end;
+}
+
+.mobile-device-row,
+.mobile-data-row,
+.social-candidate-row {
+  display: grid;
+  gap: 6px;
+  min-height: 58px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: 10px;
+}
+
+.mobile-device-row {
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+}
+
+.social-candidate-row a {
+  color: var(--color-accent-strong);
+  overflow-wrap: anywhere;
+}
+
 .agents-surface {
   min-height: calc(100vh - 48px);
 }
@@ -985,6 +1026,9 @@ select {
   .cases-layout,
   .agents-hq-layout,
   .agents-run-box,
+  .mobile-layout,
+  .social-layout,
+  .social-command-panel,
   .field-grid,
   .agent-row {
     grid-template-columns: 1fr;

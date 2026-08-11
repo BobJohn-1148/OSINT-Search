@@ -5,6 +5,7 @@
  * unnoticed.
  */
 import Database from "better-sqlite3";
+import { migrations } from "../../src/db/migrations";
 import { runMigrations } from "../../src/db/migrations/runner";
 
 function openMemoryDatabase() {
@@ -35,7 +36,8 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 12, name: "scan-topology" },
     { id: 13, name: "analyzers" },
     { id: 14, name: "credential-monitoring" },
-    { id: 15, name: "image-username-depth" }
+    { id: 15, name: "image-username-depth" },
+    { id: 16, name: "tools-mobile-social" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -62,10 +64,41 @@ it("migration runner applies migrations and is idempotent on second run", () => 
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'exposures'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'monitoring_alerts'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'image_searches'").get()).toBeTruthy();
-  expect(db.prepare("SELECT COUNT(*) AS count FROM tool_catalog").get()).toEqual({ count: 11 });
+  expect((db.prepare("SELECT COUNT(*) AS count FROM tool_catalog").get() as { count: number }).count).toBeGreaterThan(70);
   expect(db.prepare("SELECT install_command FROM tool_catalog WHERE id = 'reconftw'").get()).toEqual({
     install_command: "git clone https://github.com/six2dez/reconftw && cd reconftw && ./install.sh"
   });
+  expect(db.prepare("SELECT tier, category FROM tool_catalog WHERE id = 'nuclei'").get()).toEqual({
+    tier: "active",
+    category: "web"
+  });
+  expect(db.prepare("SELECT tier, category FROM tool_catalog WHERE id = 'juice-shop-lab'").get()).toEqual({
+    tier: "passive",
+    category: "lab"
+  });
+  expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'mobile_device_snapshots'").get()).toBeTruthy();
+});
+
+it("phase 13 migration preserves existing tool runs so upgraded databases keep catalog evidence", () => {
+  const db = openMemoryDatabase();
+  for (const migration of migrations.filter((entry) => entry.id < 16)) {
+    migration.up(db);
+  }
+  db.prepare(
+    `INSERT INTO tool_runs (id, tool_id, case_id, target, wsl_distro, argv_json, status, stdout, stderr)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run("run-one", "sherlock", null, "alice", "Ubuntu", JSON.stringify(["sherlock", "alice"]), "succeeded", "ok", "");
+
+  migrations.find((entry) => entry.id === 16)?.up(db);
+
+  expect(db.prepare("SELECT tool_id, target, status, stdout FROM tool_runs WHERE id = 'run-one'").get()).toEqual({
+    tool_id: "sherlock",
+    target: "alice",
+    status: "succeeded",
+    stdout: "ok"
+  });
+  expect(db.prepare("SELECT id FROM tool_catalog WHERE id = 'nuclei'").get()).toEqual({ id: "nuclei" });
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 it("an audit_events row cannot be updated or deleted because history is append-only", () => {

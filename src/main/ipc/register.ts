@@ -40,11 +40,13 @@ import { createDashboardHandlers } from "./handlers/dashboard-handlers.js";
 import { createKeysHandlers } from "./handlers/keys-handlers.js";
 import { createImageUsernameHandlers } from "./handlers/image-username-handlers.js";
 import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
+import { createMobileHandlers } from "./handlers/mobile-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createReportsHandlers } from "./handlers/reports-handlers.js";
 import { createScanHandlers } from "./handlers/scan-handlers.js";
 import { createSearchHandlers } from "./handlers/search-handlers.js";
 import { createSettingsHandlers } from "./handlers/settings-handlers.js";
+import { createSocialHandlers } from "./handlers/social-handlers.js";
 import { createSystemHandlers } from "./handlers/system-handlers.js";
 import { createToolsHandlers } from "./handlers/tools-handlers.js";
 import { executeIpcHandler } from "./transport.js";
@@ -57,6 +59,8 @@ import { WslToolLauncher } from "../tools/wsl-launcher.js";
 import { ImageUsernameService } from "../image-username/image-username-service.js";
 import { MonitoringService } from "../monitoring/monitoring-service.js";
 import { DashboardService } from "../dashboard/dashboard-service.js";
+import { MobileService } from "../mobile/mobile-service.js";
+import { SocialAnalyzerService } from "../social/social-analyzer-service.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -80,6 +84,8 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const toolsRepository = new ToolsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
   const wslToolLauncher = new WslToolLauncher();
+  const mobileService = new MobileService();
+  const socialAnalyzerService = new SocialAnalyzerService();
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("agent:events", { events });
@@ -193,6 +199,8 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createToolsHandlers(toolsService),
     ...createAnalyzersHandlers(analyzersService),
     ...createMonitoringHandlers(monitoringService),
+    ...createMobileHandlers(mobileService),
+    ...createSocialHandlers(socialAnalyzerService),
     ...createImageUsernameHandlers(imageUsernameService),
     ...createSearchHandlers(
       searchRepository,

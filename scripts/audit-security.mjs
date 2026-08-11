@@ -322,6 +322,37 @@ if (!fs.existsSync(path.join(repoRoot, "assets", "brand", "reacher-icon.ico"))) 
   fail("Reacher Windows icon is missing");
 }
 
+const expansionMigrationText = read(path.join(srcRoot, "db", "migrations", "016-tools-mobile-social.ts"));
+for (const required of ["nuclei", "hashcat", "volatility3", "juice-shop-lab", "adb", "libimobiledevice", "\"active\""]) {
+  if (!expansionMigrationText.includes(required)) {
+    fail(`tools mobile social migration is missing ${required}`);
+  }
+}
+
+const mobileServiceText = read(path.join(srcRoot, "main", "mobile", "mobile-service.ts"));
+for (const required of ["execFile", "shell: false", "[\"devices\", \"-l\"]", "[\"-l\"]", "unavailableTools"]) {
+  if (!mobileServiceText.includes(required)) {
+    fail(`mobile service is missing ${required}`);
+  }
+}
+
+const socialServiceText = read(path.join(srcRoot, "main", "social", "social-analyzer-service.ts"));
+const socialCatalogText = read(path.join(srcRoot, "main", "social", "social-network-catalog.generated.ts"));
+for (const required of ["status: \"candidate\"", "recommendedTools"]) {
+  if (!socialServiceText.includes(required)) {
+    fail(`social analyzer service is missing ${required}`);
+  }
+}
+if ((socialCatalogText.match(/"name":/g) ?? []).length < 300) {
+  fail("social analyzer catalog has fewer than 300 networks");
+}
+
+for (const disallowed of ["AmsiScanBuffer", "EtwEventWrite", "Cobalt Stager", "Sliver stager", "shellcode wrapper", "reverse shell generator"]) {
+  if (sourceText.toLowerCase().includes(disallowed.toLowerCase())) {
+    fail(`source contains disallowed payload or evasion generator term: ${disallowed}`);
+  }
+}
+
 if (/launchInWsl|child_process|execFile|spawn\(/.test(rendererText)) {
   fail("renderer appears to launch tools or child processes");
 }
@@ -330,4 +361,4 @@ if (process.exitCode) {
   process.exit(process.exitCode);
 }
 
-console.log("PASS: Phase 12 security invariants hold");
+console.log("PASS: Phase 13 security invariants hold");

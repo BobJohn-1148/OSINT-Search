@@ -53,6 +53,64 @@ function createDefaultInvokeMock() {
     if (channel === "audit:query") {
       return Promise.resolve({ ok: true as const, value: { events: [] } });
     }
+    if (channel === "mobile:profiles") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          profiles: [
+            {
+              platform: "android",
+              label: "Android",
+              requiredTool: "adb",
+              dataTypes: [
+                {
+                  id: "android-device-info",
+                  label: "Device info",
+                  sensitivity: "medium",
+                  description: "Model and build data.",
+                  commandPreview: ["adb", "shell", "getprop"]
+                }
+              ]
+            },
+            {
+              platform: "ios",
+              label: "Apple iOS",
+              requiredTool: "libimobiledevice",
+              dataTypes: [
+                {
+                  id: "ios-device-info",
+                  label: "Device info",
+                  sensitivity: "medium",
+                  description: "Trusted-pairing inventory.",
+                  commandPreview: ["ideviceinfo"]
+                }
+              ]
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "mobile:detect") {
+      return Promise.resolve({ ok: true as const, value: { devices: [], unavailableTools: ["adb"] } });
+    }
+    if (channel === "social:analyze") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          username: "jdoe",
+          totalNetworks: 320,
+          candidates: [
+            {
+              network: "Example social",
+              url: "https://example.test/jdoe",
+              fields: ["profile", "relationships", "images"],
+              status: "candidate"
+            }
+          ],
+          recommendedTools: ["maigret-social", "whatsmyname"]
+        }
+      });
+    }
     if (channel === "settings:get") {
       return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "false" } });
     }
@@ -205,6 +263,9 @@ beforeEach(() => {
         "system:pickImage",
         "dashboard:summary",
         "audit:query",
+        "mobile:profiles",
+        "mobile:detect",
+        "social:analyze",
         "keys:list",
         "providers:list",
         "agents:list",
@@ -283,6 +344,10 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Run scan" })).toBeInTheDocument();
     } else if (route.id === "analyzers") {
       expect(screen.getByRole("button", { name: "Build dorks" })).toBeInTheDocument();
+    } else if (route.id === "mobile") {
+      expect(screen.getByRole("button", { name: "Detect mobile devices" })).toBeInTheDocument();
+    } else if (route.id === "social-analyzer") {
+      expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
     } else if (route.id === "audit-log") {
       expect(screen.getByRole("button", { name: "Apply filters" })).toBeInTheDocument();
     } else {

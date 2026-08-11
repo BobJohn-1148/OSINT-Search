@@ -100,6 +100,12 @@ import {
   watchRemoveResponseSchema
 } from "./schemas/monitoring.js";
 import {
+  mobileDetectRequestSchema,
+  mobileDetectResponseSchema,
+  mobileProfilesRequestSchema,
+  mobileProfilesResponseSchema
+} from "./schemas/mobile.js";
+import {
   providersListRequestSchema,
   providersListResponseSchema,
   providersTestRequestSchema,
@@ -113,6 +119,10 @@ import {
   reportOpenRequestSchema,
   reportOpenResponseSchema
 } from "./schemas/reports.js";
+import {
+  socialAnalyzeRequestSchema,
+  socialAnalyzeResponseSchema
+} from "./schemas/social.js";
 import {
   searchGetRequestSchema,
   searchGetResponseSchema,
@@ -641,6 +651,30 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists stored breach exposures for all or one watch target."
+  }),
+  "mobile:profiles": defineChannel({
+    request: mobileProfilesRequestSchema,
+    response: mobileProfilesResponseSchema,
+    capability: "mobile.readProfiles",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists Android and iOS data categories that can be reviewed from a trusted phone."
+  }),
+  "mobile:detect": defineChannel({
+    request: mobileDetectRequestSchema,
+    response: mobileDetectResponseSchema,
+    capability: "mobile.detect",
+    sensitivity: "high",
+    mutates: false,
+    summary: "Runs fixed local adb and libimobiledevice probes to list attached trusted devices."
+  }),
+  "social:analyze": defineChannel({
+    request: socialAnalyzeRequestSchema,
+    response: socialAnalyzeResponseSchema,
+    capability: "social.analyze",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Generates candidate public social profile URLs from the offline WhatsMyName catalog."
   }),
   "search:image": defineChannel({
     request: searchImageRequestSchema,

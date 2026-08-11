@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json",
     "lint": "eslint .",
     "test": "vitest run",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run audit:security && node scripts/phase-audit.mjs 12",
+    "verify": "npm run typecheck && npm run lint && npm test && npm run audit:security && node scripts/phase-audit.mjs 13",
     "audit:security": "node scripts/audit-security.mjs",
     "package:dir": "npm run build && electron-builder --dir --publish never",
     "package:win": "npm run build && electron-builder --win --publish never",
