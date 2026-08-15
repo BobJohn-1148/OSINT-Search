@@ -10,7 +10,11 @@ output/
 results/
 dist/
 build/
+release/
+*.asar
+*.exe
 .gh-token
 .gh-token.txt
 .git-credentials
 token.txt
+graphify-out/

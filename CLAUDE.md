@@ -119,3 +119,6 @@ actually investigate. The kept constraint is lawful, open-source collection on
 owned or authorized targets, plus the authorization gate on active actions. Do
 not build features whose primary purpose is stalking/harassing private
 individuals or intruding on systems the owner is not authorized to test.
+
+## Stability and performance (invariant)
+Tool runs execute in the background (main process/worker), never on the UI thread. Fan-out is bounded by a job queue; streamed results are batched to the renderer; output is capped and killable; the tree is virtualized. A search that floods thousands of results must throttle, not crash. Full spec: `planning/STABILITY.md`.

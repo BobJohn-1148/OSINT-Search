@@ -1,0 +1,40 @@
+/**
+ * Theme values are named tokens because renderer components must describe intent,
+ * not pick colors ad hoc. If routes used raw colors directly, later branding and
+ * the phase audit could not prove the console palette is applied consistently.
+ */
+:root {
+  --font-ui: Inter, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --color-app: rgb(11 16 22);
+  --color-app-sheen: rgb(255 255 255 / 3%);
+  --color-transparent: rgb(255 255 255 / 0%);
+  --color-surface: rgb(17 24 34);
+  --color-surface-raised: rgb(24 33 46);
+  --color-border: rgb(48 62 78);
+  --color-border-strong: rgb(78 99 122);
+  --color-text: rgb(228 235 243);
+  --color-text-muted: rgb(149 164 181);
+  --color-accent: rgb(73 169 255);
+  --color-accent-strong: rgb(119 205 255);
+  --color-accent-border: rgb(73 169 255 / 48%);
+  --color-accent-surface: rgb(73 169 255 / 12%);
+  --color-positive: rgb(88 214 141);
+  --color-warning: rgb(247 194 88);
+  --shadow-panel: 0 18px 48px rgb(0 0 0 / 28%);
+  --radius-control: 6px;
+  --sidebar-expanded: 248px;
+  --sidebar-collapsed: 76px;
+  --xy-node-background-color-default: var(--color-surface-raised);
+  --xy-node-color-default: var(--color-text);
+  --xy-node-border-default: 1px solid var(--color-accent-border);
+  --xy-edge-stroke-default: var(--color-accent);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--color-surface-raised);
+  --xy-controls-button-color-default: var(--color-text);
+  --xy-controls-button-color-hover-default: var(--color-accent-strong);
+  --xy-controls-button-border-color-default: var(--color-border);
+  --xy-background-color-default: var(--color-app);
+  --xy-background-pattern-dots-color-default: var(--color-border);
+}
