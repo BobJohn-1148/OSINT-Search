@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "npm run build:main && vite build",
-    "build:main": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json",
+    "build:main": "tsc -p tsconfig.main.json && esbuild src/preload/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist/preload/preload.cjs",
     "start": "npm run build && electron .",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.preload.json",
     "lint": "eslint .",
@@ -41,6 +41,14 @@
       {
         "from": "assets/brand",
         "to": "assets/brand"
+      },
+      {
+        "from": "scripts/scrapegraph-osint.py",
+        "to": "scripts/scrapegraph-osint.py"
+      },
+      {
+        "from": "requirements-scrapegraph.txt",
+        "to": "requirements-scrapegraph.txt"
       }
     ],
     "win": {
@@ -86,6 +94,7 @@
     "@vitejs/plugin-react": "^6.0.5",
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
     "eslint": "^10.8.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.3",

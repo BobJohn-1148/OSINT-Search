@@ -21,6 +21,17 @@ export const systemPickImageResponseSchema = z.object({
   imagePath: z.string().min(1).nullable()
 });
 
+export const systemLocalNetworksRequestSchema = z.object({});
+export const systemLocalNetworkSchema = z.object({
+  name: z.string().min(1),
+  address: z.string().min(1),
+  cidr: z.string().min(1)
+});
+export const systemLocalNetworksResponseSchema = z.object({
+  networks: z.array(systemLocalNetworkSchema)
+});
+
 export type SystemPingRequest = z.infer<typeof systemPingRequestSchema>;
 export type SystemPingResponse = z.infer<typeof systemPingResponseSchema>;
 export type SystemPickImageResponse = z.infer<typeof systemPickImageResponseSchema>;
+export type SystemLocalNetworksResponse = z.infer<typeof systemLocalNetworksResponseSchema>;

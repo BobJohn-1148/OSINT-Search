@@ -29,7 +29,7 @@ export function strengthBand(sourceCount: number): StrengthBand {
 export function correlateObservations(observations: readonly Observation[]): CorrelatedEntity[] {
   const grouped = new Map<string, Observation[]>();
   for (const observation of observations) {
-    const key = normalizeEntity(observation.entity);
+    const key = factKey(observation);
     grouped.set(key, [...(grouped.get(key) ?? []), observation]);
   }
 
@@ -71,7 +71,7 @@ export function buildSearchTree(input: {
         sourceId: status.sourceId,
         saveable: true,
         children: sourceObservations.map((observation) => {
-          const entity = input.entities.find((candidate) => normalizeEntity(candidate.entity) === normalizeEntity(observation.entity));
+          const entity = input.entities.find((candidate) => factKey(candidate) === factKey(observation));
           return {
             id: `observation:${observation.id}`,
             label: observation.value,
@@ -93,12 +93,27 @@ export function buildSearchTree(input: {
 
 export function buildSearchRunResult(input: Omit<SearchRunResult, "entities" | "tree">): SearchRunResult {
   const entities = correlateObservations(input.observations);
-  const tree = buildSearchTree({ ...input, entities });
-  return { ...input, entities, tree };
+  const observations = input.observations.map((observation) => {
+    const entity = entities.find((candidate) => factKey(candidate) === factKey(observation));
+    return {
+      ...observation,
+      confidence: entity?.strength ?? 1
+    };
+  });
+  const tree = buildSearchTree({ ...input, observations, entities });
+  return { ...input, observations, entities, tree };
 }
 
 function normalizeEntity(entity: string): string {
   return entity.trim().toLowerCase();
+}
+
+function normalizeFactValue(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function factKey(fact: Pick<Observation, "entity" | "type" | "value">): string {
+  return `${normalizeEntity(fact.entity)}\u0000${normalizeFactValue(fact.type)}\u0000${normalizeFactValue(fact.value)}`;
 }
 
 function inferPivotSeed(value: string): SearchSeed | undefined {

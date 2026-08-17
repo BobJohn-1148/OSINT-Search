@@ -12,6 +12,9 @@ export interface HqPalette {
   readonly accent: string;
   readonly accentStrong: string;
   readonly border: string;
+  readonly positive: string;
+  readonly warning: string;
+  readonly danger: string;
 }
 
 export function readHqPalette(): HqPalette {
@@ -25,6 +28,9 @@ export function readHqPalette(): HqPalette {
     muted: token("--color-text-muted"),
     accent: token("--color-accent"),
     accentStrong: token("--color-accent-strong"),
-    border: token("--color-border")
+    border: token("--color-border"),
+    positive: token("--color-positive"),
+    warning: token("--color-warning"),
+    danger: token("--color-danger")
   };
 }

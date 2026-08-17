@@ -3,14 +3,14 @@
  * terminal emulator. If it assembled commands locally, active authorization and
  * fixed argv launches would depend on renderer trust instead of audited IPC.
  */
-import { Plus, RefreshCw, Save, ShieldCheck, TerminalSquare } from "lucide-react";
+import { ExternalLink, Plus, RefreshCw, Save, ShieldCheck, TerminalSquare } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CaseRecord } from "../../shared/schemas/cases";
 import type { AuthorizationRecord, ToolCatalogRecord, ToolOutputEvent, ToolRunRecord } from "../../shared/schemas/tools";
-import type { ToolCategory, ToolTier } from "../../shared/types/tools";
+import { toolCategoryValues, type ToolCategory, type ToolTier } from "../../shared/types/tools";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
-const categoryOptions: readonly ToolCategory[] = ["recon", "username", "email", "phone", "crawler", "network", "packet", "framework"];
+const categoryOptions: readonly ToolCategory[] = toolCategoryValues;
 const tierOptions: readonly ToolTier[] = ["passive", "active"];
 
 interface CatalogDraft {
@@ -236,6 +236,10 @@ export function ToolsView() {
                 <TerminalSquare size={18} />
                 Launch tool
               </button>
+              <a className="action-button" href={selectedTool.officialLink} target="_blank" rel="noreferrer">
+                <ExternalLink size={18} />
+                Open official link
+              </a>
             </div>
           ) : null}
           <div className="action-row">
@@ -271,6 +275,9 @@ export function ToolsView() {
                 <button className="action-button" type="button" onClick={() => void copyInstall(tool.installCommand)}>
                   Copy install
                 </button>
+                <a className="action-button" href={tool.officialLink} target="_blank" rel="noreferrer">
+                  Open link
+                </a>
               </div>
             ))}
           </div>

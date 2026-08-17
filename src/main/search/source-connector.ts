@@ -19,4 +19,5 @@ export interface SourceConnector {
 export interface SourceRunContext {
   readonly signal?: AbortSignal;
   fetchJson(url: string, init?: RequestInit): Promise<unknown>;
+  fetchText(url: string, init?: RequestInit): Promise<string>;
 }

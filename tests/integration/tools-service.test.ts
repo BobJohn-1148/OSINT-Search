@@ -147,6 +147,67 @@ it("catalog add and edit persists so local WSL tools stay configurable", () => {
   expect(updated.defaultArgs).toEqual(["helper", "--json"]);
 });
 
+it("seeds 3uTools as a passive mobile Windows companion entry", () => {
+  const { toolsRepository } = createService();
+
+  expect(toolsRepository.getCatalog("3utools")).toEqual(
+    expect.objectContaining({
+      id: "3utools",
+      name: "3uTools",
+      category: "mobile",
+      tier: "passive",
+      officialLink: "https://www.3u.com/",
+      defaultArgs: ["3uTools.exe"]
+    })
+  );
+});
+
+it("seeds iPhone acquisition and backup-analysis tools as passive mobile entries", () => {
+  const { toolsRepository } = createService();
+
+  expect(toolsRepository.getCatalog("pymobiledevice3")).toEqual(
+    expect.objectContaining({
+      category: "mobile",
+      tier: "passive",
+      defaultArgs: ["pymobiledevice3"]
+    })
+  );
+  expect(toolsRepository.getCatalog("mvt-ios")).toEqual(
+    expect.objectContaining({
+      category: "mobile",
+      tier: "passive",
+      defaultArgs: ["mvt-ios", "check-backup"]
+    })
+  );
+  expect(toolsRepository.getCatalog("ileapp")).toEqual(
+    expect.objectContaining({
+      category: "mobile",
+      tier: "passive"
+    })
+  );
+  expect(toolsRepository.getCatalog("idevicebackup2")).toEqual(
+    expect.objectContaining({
+      category: "mobile",
+      tier: "passive",
+      defaultArgs: ["idevicebackup2", "backup"]
+    })
+  );
+});
+
+it("seeds RevShells as a reference-only lab catalog entry", () => {
+  const { toolsRepository } = createService();
+
+  expect(toolsRepository.getCatalog("revshells")).toEqual(
+    expect.objectContaining({
+      name: "RevShells",
+      category: "lab",
+      tier: "passive",
+      officialLink: "https://www.revshells.com/",
+      defaultArgs: ["echo", "Open https://www.revshells.com/ for authorized lab or CTF use only."]
+    })
+  );
+});
+
 it("detect checks installed tools with fixed WSL which commands", async () => {
   const { service, spawnCalls } = createService();
 

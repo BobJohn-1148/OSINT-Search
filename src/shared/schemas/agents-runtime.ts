@@ -89,7 +89,8 @@ export const agentPlaybookSchema = z.object({
 export const agentRunRequestSchema = z.object({
   agentId: z.string().min(1).default("osint-agent"),
   seed: agentSeedSchema,
-  caseId: z.string().min(1).optional()
+  caseId: z.string().min(1).optional(),
+  missionBrief: z.string().trim().min(1).max(2000).optional()
 });
 export const agentRunResponseSchema = z.object({ run: agentRunRecordSchema, finding: agentFindingSchema });
 

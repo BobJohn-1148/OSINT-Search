@@ -37,7 +37,10 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 13, name: "analyzers" },
     { id: 14, name: "credential-monitoring" },
     { id: 15, name: "image-username-depth" },
-    { id: 16, name: "tools-mobile-social" }
+    { id: 16, name: "tools-mobile-social" },
+    { id: 17, name: "3utools-catalog" },
+    { id: 18, name: "ios-mobile-tool-catalog" },
+    { id: 19, name: "revshells-lab-tool-catalog" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -73,6 +76,31 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     category: "web"
   });
   expect(db.prepare("SELECT tier, category FROM tool_catalog WHERE id = 'juice-shop-lab'").get()).toEqual({
+    tier: "passive",
+    category: "lab"
+  });
+  expect(db.prepare("SELECT name, tier, category FROM tool_catalog WHERE id = '3utools'").get()).toEqual({
+    name: "3uTools",
+    tier: "passive",
+    category: "mobile"
+  });
+  expect(db.prepare("SELECT name, tier, category FROM tool_catalog WHERE id = 'pymobiledevice3'").get()).toEqual({
+    name: "pymobiledevice3",
+    tier: "passive",
+    category: "mobile"
+  });
+  expect(db.prepare("SELECT name, tier, category FROM tool_catalog WHERE id = 'mvt-ios'").get()).toEqual({
+    name: "MVT iOS",
+    tier: "passive",
+    category: "mobile"
+  });
+  expect(db.prepare("SELECT name, tier, category FROM tool_catalog WHERE id = 'ileapp'").get()).toEqual({
+    name: "iLEAPP",
+    tier: "passive",
+    category: "mobile"
+  });
+  expect(db.prepare("SELECT name, tier, category FROM tool_catalog WHERE id = 'revshells'").get()).toEqual({
+    name: "RevShells",
     tier: "passive",
     category: "lab"
   });

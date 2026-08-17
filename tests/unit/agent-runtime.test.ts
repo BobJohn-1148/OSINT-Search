@@ -9,7 +9,7 @@ import { AgentRuntimeRepository } from "../../src/db/repositories/agent-runtime-
 import { AgentsRepository } from "../../src/db/repositories/agents-repository";
 import { AuditRepository } from "../../src/db/repositories/audit-repository";
 import { CasesRepository } from "../../src/db/repositories/cases-repository";
-import { AgentRuntimeService } from "../../src/main/agents/agent-runtime-service";
+import { AgentRuntimeService, defaultAgentCaseTitle } from "../../src/main/agents/agent-runtime-service";
 import { AgentEventBatcher } from "../../src/main/agents/agent-event-batcher";
 import { agentFindingSchema, STEP_FORMAT, type AgentRuntimeEvent } from "../../src/shared/schemas/agents-runtime";
 
@@ -112,6 +112,25 @@ it("findings are saved to case and memory so agent output becomes evidence", asy
   expect(result.finding.savedItemId).toBeTruthy();
   expect(casesRepository.timeline(caseRecord.id).map((item) => item.title)).toEqual([result.finding.title]);
   expect(runtimeRepository.listMemory("global", 10).map((item) => item.key)).toEqual(["email:alice@example.com"]);
+});
+
+it("auto-created agent cases use a short seed label instead of leaking mission brief text into every case dropdown", async () => {
+  expect(defaultAgentCaseTitle({ type: "domain", value: "example.com" })).toBe("Agent findings: domain example.com");
+  expect(defaultAgentCaseTitle({
+    type: "business",
+    value: "Follow the mission brief, cite sources, and save only evidence-backed findings."
+  })).toBe("Agent findings: business");
+
+  const { casesRepository, service } = createRuntime();
+  await service.run({
+    agentId: "osint-agent",
+    seed: {
+      type: "business",
+      value: "Follow the mission brief, cite sources, and save only evidence-backed findings."
+    }
+  });
+
+  expect(casesRepository.list().map((caseRecord) => caseRecord.title)).toEqual(["Agent findings: business"]);
 });
 
 it("marks a run failed and emits error state when a post-start save fails", async () => {

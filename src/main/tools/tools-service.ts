@@ -4,6 +4,8 @@
  * launched tools or decided authorization locally, a compromised view could run
  * active scans outside Reacher's policy boundary.
  */
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { AuditRepository } from "../../db/repositories/audit-repository.js";
 import type { CasesRepository } from "../../db/repositories/cases-repository.js";
 import type { ToolsRepository } from "../../db/repositories/tools-repository.js";
@@ -13,10 +15,13 @@ import type {
   CatalogUpdateRequest,
   ToolCatalogRecord,
   ToolOutputEvent,
+  ToolRunRecord,
   ToolsLaunchRequest
 } from "../../shared/schemas/tools.js";
 import type { ToolTier } from "../../shared/types/tools.js";
 import type { ToolOutputListener, WslToolLauncher } from "./wsl-launcher.js";
+
+const THREE_UTOOLS_ID = "3utools";
 
 export class ToolsService {
   public constructor(
@@ -24,7 +29,8 @@ export class ToolsService {
     private readonly casesRepository: CasesRepository,
     private readonly auditRepository: AuditRepository,
     private readonly launcher: WslToolLauncher,
-    private readonly emitOutput: ToolOutputListener
+    private readonly emitOutput: ToolOutputListener,
+    private readonly launchWindowsGuiTool: (executablePath: string) => void = launchDetachedWindowsGuiTool
   ) {}
 
   public listCatalog(): ToolCatalogRecord[] {
@@ -32,17 +38,25 @@ export class ToolsService {
   }
 
   public async detect(wslDistro: string): Promise<{ readonly toolId: string; readonly installed: boolean }[]> {
-    const executables = this.toolsRepository
+    const catalogTools = this.toolsRepository
       .listCatalog()
       .map((tool) => ({ toolId: tool.id, executable: tool.defaultArgs[0] }))
       .filter((tool): tool is { readonly toolId: string; readonly executable: string } => Boolean(tool.executable));
-    return [...(await this.launcher.detect({ wslDistro, executables }))];
+    const windowsGuiTools = catalogTools.filter((tool) => tool.toolId === THREE_UTOOLS_ID);
+    const wslTools = catalogTools.filter((tool) => tool.toolId !== THREE_UTOOLS_ID);
+    return [
+      ...windowsGuiTools.map((tool) => ({ toolId: tool.toolId, installed: findThreeUToolsExecutable() !== null })),
+      ...(await this.launcher.detect({ wslDistro, executables: wslTools }))
+    ];
   }
 
   public async launch(request: ToolsLaunchRequest) {
     const tool = this.toolsRepository.getCatalog(request.toolId);
     if (!tool) {
       throw new Error(`Tool ${request.toolId} does not exist`);
+    }
+    if (tool.id === THREE_UTOOLS_ID) {
+      return this.launchThreeUTools(request, tool);
     }
 
     const argv = [...tool.defaultArgs, request.target];
@@ -166,6 +180,44 @@ export class ToolsService {
     return this.toolsRepository.listAuthorizations();
   }
 
+  private launchThreeUTools(request: ToolsLaunchRequest, tool: ToolCatalogRecord): ToolRunRecord {
+    const executablePath = findThreeUToolsExecutable();
+    const argv = executablePath ? [executablePath] : [...tool.defaultArgs];
+    const startedRun = this.toolsRepository.createRun({
+      toolId: tool.id,
+      caseId: request.caseId ?? null,
+      target: request.target,
+      wslDistro: "Windows",
+      argv,
+      status: "running"
+    });
+    this.auditRepository.record({
+      actor: "local-user",
+      action: "tool.launch",
+      objectType: "tool_run",
+      objectId: startedRun.id,
+      sensitivity: "medium",
+      detail: { toolId: tool.id, target: request.target, tier: tool.tier, launchMode: "windows-gui" }
+    });
+
+    if (!executablePath) {
+      return this.toolsRepository.finishRun({
+        runId: startedRun.id,
+        status: "failed",
+        stdout: "",
+        stderr: "3uTools was not found in the common Windows install locations. Install it from https://www.3u.com/, then run detection again."
+      });
+    }
+
+    this.launchWindowsGuiTool(executablePath);
+    return this.toolsRepository.finishRun({
+      runId: startedRun.id,
+      status: "succeeded",
+      stdout: `Opened 3uTools from ${executablePath}. Use Reacher's Mobile page for formatted forensic collection and reports.`,
+      stderr: ""
+    });
+  }
+
   private requireAuthorization(target: string, tier: ToolTier): AuthorizationRecord | null {
     return this.toolsRepository.findMatchingAuthorization({
       target,
@@ -173,6 +225,20 @@ export class ToolsService {
       nowTs: new Date().toISOString()
     });
   }
+}
+
+function findThreeUToolsExecutable(): string | null {
+  const candidates = [
+    `${process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)"}\\3uTools\\3uTools.exe`,
+    `${process.env.ProgramFiles ?? "C:\\Program Files"}\\3uTools\\3uTools.exe`,
+    `${process.env.LOCALAPPDATA ?? ""}\\Programs\\3uTools\\3uTools.exe`
+  ].filter((candidate) => candidate.trim().length > 0);
+  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+function launchDetachedWindowsGuiTool(executablePath: string): void {
+  const child = spawn(executablePath, [], { detached: true, shell: false, stdio: "ignore", windowsHide: false });
+  child.unref();
 }
 
 function formatToolEvidenceText(stdout: string, stderr: string): string {

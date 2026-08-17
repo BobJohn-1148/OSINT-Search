@@ -1,8 +1,8 @@
 /**
  * Scan schemas make active network scans a typed IPC contract because the same
- * target string must drive authorization, nmap argv, parsed hosts, topology, and
- * report export. If each layer shaped scans independently, CIDR widening or
- * uncited reports could slip in unnoticed.
+ * target string must drive local nmap argv, parsed hosts, topology, and report
+ * export. If each layer shaped scans independently, CIDR widening or uncited
+ * reports could slip in unnoticed.
  */
 import { z } from "zod";
 import { scanStatusValues, scanTimingValues, scanTypeValues } from "../types/scans.js";
@@ -77,7 +77,6 @@ export const scanTopologySchema = z.object({
 
 export const scanRunRequestSchema = z.object({
   target: z.string().min(1),
-  wslDistro: z.string().min(1).default("Ubuntu"),
   options: scanOptionSchema
 });
 export const scanRunResponseSchema = z.object({

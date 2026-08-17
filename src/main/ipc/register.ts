@@ -63,6 +63,8 @@ import { DashboardService } from "../dashboard/dashboard-service.js";
 import { MobileService } from "../mobile/mobile-service.js";
 import { SocialAnalyzerService } from "../social/social-analyzer-service.js";
 import { MethodologyService } from "../methodology/methodology-service.js";
+import { ApiDiagnosticsService } from "../diagnostics/api-diagnostics-service.js";
+import { createApiDiagnosticsHandlers } from "./handlers/api-diagnostics-handlers.js";
 
 type HandlerMap = {
   readonly [TChannel in IpcChannel]: (
@@ -89,6 +91,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const mobileService = new MobileService();
   const socialAnalyzerService = new SocialAnalyzerService();
   const methodologyService = new MethodologyService();
+  const apiDiagnosticsService = new ApiDiagnosticsService(vaultRepository, auditRepository);
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("agent:events", { events });
@@ -120,7 +123,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
       webContents.send("scan:output", event);
     }
   };
-  const scanService = new ScanService(scansRepository, toolsRepository, auditRepository, wslToolLauncher, emitScanOutput);
+  const scanService = new ScanService(scansRepository, auditRepository, emitScanOutput);
   const monitoringService = new MonitoringService(
     monitoringRepository,
     casesRepository,
@@ -196,6 +199,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createScanHandlers(scanService),
     ...createKeysHandlers(vaultRepository, auditRepository),
     ...createProvidersHandlers(vaultRepository),
+    ...createApiDiagnosticsHandlers(apiDiagnosticsService),
     ...createAgentsHandlers(agentsRepository),
     ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
     ...createArchitectAgentHandlers(architectAgentService),

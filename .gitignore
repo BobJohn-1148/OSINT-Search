@@ -1,8 +1,10 @@
 __pycache__/
 *.pyc
 .env
+.env.local
 .venv/
 venv/
+.tools/
 node_modules/
 .DS_Store
 *.log
@@ -11,8 +13,10 @@ results/
 dist/
 build/
 release/
-.generated/
+*.asar
+*.exe
 .gh-token
 .gh-token.txt
 .git-credentials
 token.txt
+graphify-out/

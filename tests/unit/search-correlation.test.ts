@@ -42,6 +42,20 @@ it("promotes a 3-source entity to strong because corroboration is computed from 
   });
 });
 
+it("does not promote unrelated facts just because they describe the same entity", () => {
+  const entities = correlateObservations([
+    { ...observation("one", "1.1.1.1", "ipinfo"), type: "hostname", value: "one.one.one.one" },
+    { ...observation("two", "1.1.1.1", "rdap"), type: "country", value: "AU" },
+    { ...observation("three", "1.1.1.1", "shodan"), type: "port", value: "443" }
+  ]);
+
+  expect(entities).toEqual(expect.arrayContaining([
+    expect.objectContaining({ entity: "1.1.1.1", type: "country", value: "AU", strength: 1, band: "single-source" }),
+    expect.objectContaining({ entity: "1.1.1.1", type: "hostname", value: "one.one.one.one", strength: 1, band: "single-source" }),
+    expect.objectContaining({ entity: "1.1.1.1", type: "port", value: "443", strength: 1, band: "single-source" })
+  ]));
+});
+
 it("the tree builds correctly from a fixture set of observations so sources own their leaves", () => {
   const observations = [observation("one", "example.com", "rdap"), observation("two", "mail.example.com", "dns-doh")];
   const entities = correlateObservations(observations);

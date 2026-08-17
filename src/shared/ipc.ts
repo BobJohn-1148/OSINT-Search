@@ -6,6 +6,12 @@
  */
 import type { z } from "zod";
 import {
+  apiDiagnosticsListRequestSchema,
+  apiDiagnosticsListResponseSchema,
+  apiDiagnosticsTestRequestSchema,
+  apiDiagnosticsTestResponseSchema
+} from "./schemas/api-diagnostics.js";
+import {
   agentsListRequestSchema,
   agentsListResponseSchema,
   agentsSetModelRequestSchema,
@@ -100,6 +106,8 @@ import {
   watchRemoveResponseSchema
 } from "./schemas/monitoring.js";
 import {
+  mobileCollectRequestSchema,
+  mobileCollectResponseSchema,
   mobileDetectRequestSchema,
   mobileDetectResponseSchema,
   mobileProfilesRequestSchema,
@@ -156,6 +164,8 @@ import {
 import {
   systemPickImageRequestSchema,
   systemPickImageResponseSchema,
+  systemLocalNetworksRequestSchema,
+  systemLocalNetworksResponseSchema,
   systemPingRequestSchema,
   systemPingResponseSchema
 } from "./schemas/system.js";
@@ -209,6 +219,14 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Opens a main-process file picker for one local image upload."
+  }),
+  "system:localNetworks": defineChannel({
+    request: systemLocalNetworksRequestSchema,
+    response: systemLocalNetworksResponseSchema,
+    capability: "system.networks",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists local IPv4 network CIDR suggestions for authorized scanning."
   }),
   "settings:get": defineChannel({
     request: settingsGetRequestSchema,
@@ -297,6 +315,22 @@ export const IPC = {
     sensitivity: "sensitive",
     mutates: true,
     summary: "Tests one provider using the vault gate when a key is required."
+  }),
+  "apiDiagnostics:list": defineChannel({
+    request: apiDiagnosticsListRequestSchema,
+    response: apiDiagnosticsListResponseSchema,
+    capability: "apiDiagnostics.read",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists external API diagnostics without reading secrets."
+  }),
+  "apiDiagnostics:test": defineChannel({
+    request: apiDiagnosticsTestRequestSchema,
+    response: apiDiagnosticsTestResponseSchema,
+    capability: "apiDiagnostics.test",
+    sensitivity: "sensitive",
+    mutates: true,
+    summary: "Tests selected external APIs individually or all together through the audited vault gate."
   }),
   "agents:list": defineChannel({
     request: agentsListRequestSchema,
@@ -560,7 +594,7 @@ export const IPC = {
     capability: "scans.run",
     sensitivity: "medium",
     mutates: true,
-    summary: "Runs an authorized nmap scan through the WSL launcher and persists parsed topology."
+    summary: "Runs local Windows nmap and persists parsed topology."
   }),
   "scan:get": defineChannel({
     request: scanGetRequestSchema,
@@ -673,6 +707,14 @@ export const IPC = {
     sensitivity: "high",
     mutates: false,
     summary: "Runs fixed local adb and libimobiledevice probes to list attached trusted devices."
+  }),
+  "mobile:collect": defineChannel({
+    request: mobileCollectRequestSchema,
+    response: mobileCollectResponseSchema,
+    capability: "mobile.collect",
+    sensitivity: "sensitive",
+    mutates: false,
+    summary: "Collects bounded real-time metadata snapshots from one trusted local phone."
   }),
   "social:analyze": defineChannel({
     request: socialAnalyzeRequestSchema,

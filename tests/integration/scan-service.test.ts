@@ -1,7 +1,7 @@
 /**
- * Scan service tests use real SQLite and a fake launcher so active authorization,
+ * Scan service tests use real SQLite and a fake local nmap launcher so execution,
  * XML parsing, persistence, and report export are exercised together without
- * requiring WSL or touching a real network.
+ * touching a real network.
  */
 import Database from "better-sqlite3";
 import fs from "node:fs";
@@ -12,12 +12,11 @@ import { AuditRepository } from "../../src/db/repositories/audit-repository";
 import { CasesRepository } from "../../src/db/repositories/cases-repository";
 import { ReportsRepository } from "../../src/db/repositories/reports-repository";
 import { ScansRepository } from "../../src/db/repositories/scans-repository";
-import { ToolsRepository } from "../../src/db/repositories/tools-repository";
 import type { ReportDocumentModel } from "../../src/main/reports/report-model";
 import type { ReportRenderer } from "../../src/main/reports/report-renderer";
 import { ReportService } from "../../src/main/reports/report-service";
 import { ScanService } from "../../src/main/scans/scan-service";
-import type { WslRunResult } from "../../src/main/tools/wsl-launcher";
+import type { ScanRunResult } from "../../src/main/scans/scan-service";
 import type { ScanOptions } from "../../src/shared/schemas/scans";
 
 const nmapXml = `<?xml version="1.0"?>
@@ -33,60 +32,51 @@ function createHarness() {
   const db = new Database(":memory:");
   runMigrations(db);
   const scansRepository = new ScansRepository(db);
-  const toolsRepository = new ToolsRepository(db);
   const auditRepository = new AuditRepository(db);
   const launched: readonly string[][] = [];
   const launcher = {
-    run: (input: { readonly argv: readonly string[]; readonly onOutput?: (event: { readonly stream: "stdout" | "stderr"; readonly chunk: string }) => void }): Promise<WslRunResult> => {
+    run: (input: { readonly argv: readonly string[]; readonly onOutput?: (event: { readonly stream: "stdout" | "stderr"; readonly chunk: string }) => void }): Promise<ScanRunResult> => {
       (launched as string[][]).push([...input.argv]);
       input.onOutput?.({ stream: "stdout", chunk: nmapXml });
       return Promise.resolve({ stdout: nmapXml, stderr: "", exitCode: 0 });
     }
   };
-  const service = new ScanService(scansRepository, toolsRepository, auditRepository, launcher, () => undefined);
-  return { db, scansRepository, toolsRepository, auditRepository, launched, service };
+  const service = new ScanService(scansRepository, auditRepository, () => undefined, launcher);
+  return { db, scansRepository, auditRepository, launched, service };
 }
 
-it("refuses an unauthorized scan so active targets require exact approval", async () => {
+it("runs through local nmap without the old WSL authorization step", async () => {
   const harness = createHarness();
 
   const result = await harness.service.run({
     target: "192.168.1.0/24",
-    wslDistro: "Ubuntu",
     options: scanOptions()
   });
 
-  expect(result.scan.status).toBe("blocked");
-  expect(result.hosts).toEqual([]);
-  expect(harness.launched).toEqual([]);
+  expect(result.scan.status).toBe("succeeded");
+  expect(result.scan.wslDistro).toBe("Local Windows nmap");
+  expect(result.scan.authorizationId).toBeNull();
+  expect(harness.launched).toEqual([["nmap", "-oX", "-", "--top-ports", "100", "192.168.1.0/24"]]);
 });
 
-it("rejects custom nmap argv targets so authorization cannot be widened through extra operands", async () => {
+it("rejects custom nmap argv targets so scope cannot be widened through extra operands", async () => {
   const harness = createHarness();
-  harness.toolsRepository.createAuthorization({
-    target: "192.168.1.0/24",
-    tier: "active",
-    expiresTs: new Date(Date.now() + 60_000).toISOString()
-  });
 
   await expect(
     harness.service.run({
       target: "192.168.1.0/24",
-      wslDistro: "Ubuntu",
       options: scanOptions({ scanType: "custom", customArgs: ["10.0.0.0/24"] })
     })
   ).rejects.toThrow(/approved target-neutral flags/);
   await expect(
     harness.service.run({
       target: "192.168.1.0/24",
-      wslDistro: "Ubuntu",
       options: scanOptions({ scanType: "custom", customArgs: ["--", "10.0.0.0/24"] })
     })
   ).rejects.toThrow(/approved target-neutral flags/);
   await expect(
     harness.service.run({
       target: "192.168.1.0/24",
-      wslDistro: "Ubuntu",
       options: scanOptions({ scanType: "custom", customArgs: ["-iL", "targets.txt"] })
     })
   ).rejects.toThrow(/approved target-neutral flags/);
@@ -95,38 +85,26 @@ it("rejects custom nmap argv targets so authorization cannot be widened through 
 
 it("allows only approved target-neutral custom nmap flags so custom scans stay scoped", async () => {
   const harness = createHarness();
-  harness.toolsRepository.createAuthorization({
-    target: "192.168.1.0/24",
-    tier: "active",
-    expiresTs: new Date(Date.now() + 60_000).toISOString()
-  });
 
   const result = await harness.service.run({
     target: "192.168.1.0/24",
-    wslDistro: "Ubuntu",
     options: scanOptions({ scanType: "custom", customArgs: ["--reason", "--open"] })
   });
 
   expect(result.scan.status).toBe("succeeded");
-  expect(result.scan.argv).toEqual(["nmap", "-oX", "-", "-T3", "--reason", "--open", "192.168.1.0/24"]);
+  expect(result.scan.argv).toEqual(["nmap", "-oX", "-", "--reason", "--open", "192.168.1.0/24"]);
 });
 
-it("runs an authorized scan and captures parsed hosts so topology can render", async () => {
+it("runs a local scan and captures parsed hosts so topology can render", async () => {
   const harness = createHarness();
-  harness.toolsRepository.createAuthorization({
-    target: "192.168.1.0/24",
-    tier: "active",
-    expiresTs: new Date(Date.now() + 60_000).toISOString()
-  });
 
   const result = await harness.service.run({
     target: "192.168.1.0/24",
-    wslDistro: "Ubuntu",
     options: scanOptions({ serviceVersion: true })
   });
 
   expect(result.scan.status).toBe("succeeded");
-  expect(result.scan.argv).toEqual(["nmap", "-oX", "-", "-T3", "--top-ports", "100", "-sV", "192.168.1.0/24"]);
+  expect(result.scan.argv).toEqual(["nmap", "-oX", "-", "--top-ports", "100", "-sV", "192.168.1.0/24"]);
   expect(result.hosts[0]).toEqual(expect.objectContaining({ address: "192.168.1.10" }));
   expect(result.hosts[0]?.ports[0]).toEqual(expect.objectContaining({ port: 443, service: "https" }));
   expect(result.topology.nodes.map((node) => node.id)).toContain("target");
@@ -134,14 +112,8 @@ it("runs an authorized scan and captures parsed hosts so topology can render", a
 
 it("export includes the topology host table and service list so scan reports carry network context", async () => {
   const harness = createHarness();
-  harness.toolsRepository.createAuthorization({
-    target: "192.168.1.0/24",
-    tier: "active",
-    expiresTs: new Date(Date.now() + 60_000).toISOString()
-  });
   const scanResult = await harness.service.run({
     target: "192.168.1.0/24",
-    wslDistro: "Ubuntu",
     options: scanOptions()
   });
   const renderedModels: ReportDocumentModel[] = [];

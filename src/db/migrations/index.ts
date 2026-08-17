@@ -20,6 +20,9 @@ import { migration013Analyzers } from "./013-analyzers.js";
 import { migration014Monitoring } from "./014-monitoring.js";
 import { migration015ImageUsername } from "./015-image-username.js";
 import { migration016ToolsMobileSocial } from "./016-tools-mobile-social.js";
+import { migration017ThreeUToolsCatalog } from "./017-3utools-catalog.js";
+import { migration018IosMobileToolCatalog } from "./018-ios-mobile-tool-catalog.js";
+import { migration019RevShellsLabToolCatalog } from "./019-revshells-lab-tool-catalog.js";
 
 export interface Migration {
   readonly id: number;
@@ -43,5 +46,8 @@ export const migrations: readonly Migration[] = [
   migration013Analyzers,
   migration014Monitoring,
   migration015ImageUsername,
-  migration016ToolsMobileSocial
+  migration016ToolsMobileSocial,
+  migration017ThreeUToolsCatalog,
+  migration018IosMobileToolCatalog,
+  migration019RevShellsLabToolCatalog
 ];

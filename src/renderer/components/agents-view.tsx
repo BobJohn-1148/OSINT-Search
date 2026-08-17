@@ -15,8 +15,6 @@ import type {
   AgentRunRecord,
   AgentRuntimeEvent
 } from "../../shared/schemas/agents-runtime";
-import type { CaseRecord } from "../../shared/schemas/cases";
-import type { SeedType } from "../../shared/types/search";
 import { mapAgentsToPresentation, type AgentPresentation, type AgentStatusLinePool } from "../agents/agent-status";
 import { focusAgentCamera, hqCameraControlHints, type CameraFocusTarget } from "../agents/camera-controls";
 import { readHqPalette } from "../agents/theme-palette";
@@ -26,7 +24,6 @@ import { AgentsHqScene } from "./agents-hq-scene";
 
 const statusLines = rawStatusLines as AgentStatusLinePool;
 const cleanIdleSettingKey = "agents.cleanIdleStatuses";
-const seedTypes: readonly (SeedType | "image")[] = ["username", "domain", "email", "ip", "phone", "business", "mac", "image"];
 
 interface SceneBoundaryProps {
   readonly children: ReactNode;
@@ -59,13 +56,9 @@ export function AgentsView(props: {
   const [runs, setRuns] = useState<AgentRunRecord[]>([]);
   const [memory, setMemory] = useState<AgentMemoryRecord[]>([]);
   const [playbooks, setPlaybooks] = useState<AgentPlaybook[]>([]);
-  const [cases, setCases] = useState<CaseRecord[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<"Inbox" | "History" | "Playbooks">("Inbox");
   const [cleanIdleStatuses, setCleanIdleStatuses] = useState(false);
-  const [seedType, setSeedType] = useState<SeedType | "image">("username");
-  const [seedValue, setSeedValue] = useState("jdoe");
-  const [caseId, setCaseId] = useState("");
   const [status, setStatus] = useState("Connecting");
   const [idleTick, setIdleTick] = useState(0);
   const [visible, setVisible] = useState(() => document.visibilityState === "visible");
@@ -77,6 +70,7 @@ export function AgentsView(props: {
   const [architectRequest, setArchitectRequest] = useState("Add a focused feature with tests");
   const [architectProposal, setArchitectProposal] = useState<ArchitectProposal | null>(null);
   const [architectStatus, setArchitectStatus] = useState("Architect ready");
+  const [missionBrief, setMissionBrief] = useState("Follow the mission brief, cite sources, and save only evidence-backed findings.");
   const [detectedWebGlReady] = useState(() => canInitializeWebGl());
   const SceneComponent = props.SceneComponent ?? AgentsHqScene;
   const webGlReady = props.webGlReadyOverride ?? detectedWebGlReady;
@@ -110,10 +104,6 @@ export function AgentsView(props: {
     }
     if (playbooksResult.ok) {
       setPlaybooks(playbooksResult.value.playbooks);
-    }
-    if (casesResult.ok) {
-      setCases(casesResult.value.cases);
-      setCaseId((current) => current || (casesResult.value.cases[0]?.id ?? ""));
     }
     if (cleanResult.ok) {
       setCleanIdleStatuses(cleanResult.value.value === "true");
@@ -185,16 +175,18 @@ export function AgentsView(props: {
   const useListFallback = !webGlReady || sceneFailed;
 
   async function runSelectedAgent(): Promise<void> {
-    if (!selectedAgent || !seedValue.trim()) {
+    const brief = missionBrief.trim();
+    if (!selectedAgent || !brief) {
       return;
     }
+    const seedValue = brief.length > 120 ? `${brief.slice(0, 117)}...` : brief;
     setStatus(`Running ${selectedAgent.name}`);
     const result = await invoke("agent:run", {
       agentId: selectedAgent.id,
-      seed: { type: seedType, value: seedValue.trim() },
-      caseId: caseId || undefined
+      seed: { type: "business", value: seedValue },
+      missionBrief: brief
     });
-    setStatus(result.ok ? `Saved finding for ${seedValue.trim()}` : result.error.message);
+    setStatus(result.ok ? `Saved finding for ${selectedAgent.name}` : result.error.message);
     await refresh();
   }
 
@@ -268,6 +260,8 @@ export function AgentsView(props: {
                 spacePan={spacePan}
                 focused={focused}
                 selectedAgentId={activeAgentId}
+                runs={runs}
+                memory={memory}
                 onFocusedChange={setFocused}
                 onAgentOpen={openAgent}
               />
@@ -306,16 +300,12 @@ export function AgentsView(props: {
             <AgentHub
               selectedAgent={selectedAgent}
               selectedPresentation={selectedPresentation}
-              cases={cases}
               events={events}
               memory={memory}
-              seedType={seedType}
-              seedValue={seedValue}
-              caseId={caseId}
+              runs={runs}
               cleanIdleStatuses={cleanIdleStatuses}
-              onSeedTypeChange={setSeedType}
-              onSeedValueChange={setSeedValue}
-              onCaseChange={setCaseId}
+              missionBrief={missionBrief}
+              onMissionBriefChange={setMissionBrief}
               onRun={() => void runSelectedAgent()}
               onCleanIdleChange={(next) => void setCleanIdle(next)}
               architectQuestion={architectQuestion}
@@ -369,16 +359,12 @@ function AgentFallbackList(props: {
 function AgentHub(props: {
   readonly selectedAgent: AgentRecord | null;
   readonly selectedPresentation: ReturnType<typeof mapAgentsToPresentation>[number] | null;
-  readonly cases: readonly CaseRecord[];
   readonly events: readonly AgentRuntimeEvent[];
   readonly memory: readonly AgentMemoryRecord[];
-  readonly seedType: SeedType | "image";
-  readonly seedValue: string;
-  readonly caseId: string;
+  readonly runs: readonly AgentRunRecord[];
   readonly cleanIdleStatuses: boolean;
-  readonly onSeedTypeChange: (type: SeedType | "image") => void;
-  readonly onSeedValueChange: (value: string) => void;
-  readonly onCaseChange: (caseId: string) => void;
+  readonly missionBrief: string;
+  readonly onMissionBriefChange: (value: string) => void;
   readonly onRun: () => void;
   readonly onCleanIdleChange: (value: boolean) => void;
   readonly architectQuestion: string;
@@ -391,12 +377,40 @@ function AgentHub(props: {
   readonly onArchitectPropose: () => void;
   readonly onArchitectApply: () => void;
 }) {
+  const selectedAgentId = props.selectedAgent?.id ?? "";
+  const agentRuns = props.runs.filter((run) => run.agentId === selectedAgentId);
+  const agentMemory = props.memory.filter((item) => item.sourceAgent === selectedAgentId);
+  const sharedMemory = props.memory.filter((item) => item.scope === "global");
+  const currentTask = props.selectedPresentation?.state.task ?? props.selectedPresentation?.statusText ?? "Waiting for work";
+  const lastRun = agentRuns.at(0);
+  const previousRun = agentRuns.at(1);
+  const spend = estimateAgentSpend(agentRuns);
+
   return (
     <div className="agents-panel-body">
       <section className="agents-selected-agent" aria-label="Selected agent">
-        <div>
+        <div className="agent-profile-card">
+          <span className={`agent-status-light agent-status-${props.selectedPresentation?.state.status ?? "offline"}`} aria-hidden="true" />
           <h2 className="section-title">{props.selectedAgent?.name ?? "No agent"}</h2>
-          <p className="status-text">{props.selectedPresentation?.statusText ?? "Waiting for agent configuration"}</p>
+          <p className="status-text">{agentPersonality(selectedAgentId)}</p>
+          <dl className="agent-profile-stats">
+            <div>
+              <dt>Current</dt>
+              <dd>{currentTask}</dd>
+            </div>
+            <div>
+              <dt>Recent run</dt>
+              <dd>{lastRun ? `${lastRun.seed.type}:${lastRun.seed.value}` : "No runs yet"}</dd>
+            </div>
+            <div>
+              <dt>Previous</dt>
+              <dd>{previousRun ? `${previousRun.seed.type}:${previousRun.seed.value}` : "None"}</dd>
+            </div>
+            <div>
+              <dt>Est. spend</dt>
+              <dd>{spend}</dd>
+            </div>
+          </dl>
         </div>
         <label className="agents-toggle">
           <input
@@ -409,34 +423,17 @@ function AgentHub(props: {
       </section>
 
       <section className="agents-run-box" aria-label="Run view">
-        <label className="compact-field">
-          Seed type
-          <select className="field-control" value={props.seedType} onChange={(event) => props.onSeedTypeChange(event.currentTarget.value as SeedType | "image")}>
-            {seedTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+        <label className="compact-field agents-mission-field">
+          Mission brief
+          <textarea
+            className="field-control mission-brief-input"
+            value={props.missionBrief}
+            onChange={(event) => props.onMissionBriefChange(event.currentTarget.value)}
+          />
         </label>
-        <label className="compact-field">
-          Seed
-          <input className="field-control" value={props.seedValue} onChange={(event) => props.onSeedValueChange(event.currentTarget.value)} />
-        </label>
-        <label className="compact-field">
-          Case
-          <select className="field-control" value={props.caseId} onChange={(event) => props.onCaseChange(event.currentTarget.value)}>
-            <option value="">Auto-create case</option>
-            {props.cases.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="action-button" type="button" disabled={!props.selectedAgent || !props.seedValue.trim()} onClick={props.onRun}>
+        <button className="action-button" type="button" disabled={!props.selectedAgent || !props.missionBrief.trim()} onClick={props.onRun}>
           <Play size={16} aria-hidden="true" />
-          Run agent
+          Run mission
         </button>
       </section>
 
@@ -485,14 +482,25 @@ function AgentHub(props: {
       </section>
 
       <section className="agents-event-list" aria-label="Shared memory">
-        <h3 className="agents-subtitle">Shared memory</h3>
-        {props.memory.slice(0, 4).map((item) => (
+        <h3 className="agents-subtitle">Saved memory for this agent</h3>
+        {agentMemory.slice(0, 4).map((item) => (
           <div className="agents-event-row" key={item.id}>
             <span className="mono-cell">{item.key}</span>
             <strong>{item.value}</strong>
           </div>
         ))}
-        {props.memory.length === 0 ? <p className="status-text">No shared memory yet.</p> : null}
+        {agentMemory.length === 0 ? <p className="status-text">No saved memory for this agent yet.</p> : null}
+      </section>
+
+      <section className="agents-event-list" aria-label="Shared memory">
+        <h3 className="agents-subtitle">Shared memory</h3>
+        {sharedMemory.slice(0, 4).map((item) => (
+          <div className="agents-event-row" key={item.id}>
+            <span className="mono-cell">{item.key}</span>
+            <strong>{item.value}</strong>
+          </div>
+        ))}
+        {sharedMemory.length === 0 ? <p className="status-text">No shared memory yet.</p> : null}
       </section>
     </div>
   );
@@ -564,4 +572,25 @@ function applyStateEvents(current: readonly AgentLiveState[], events: readonly A
 
 function agentName(agents: readonly AgentRecord[], agentId: string): string {
   return agents.find((agent) => agent.id === agentId)?.name ?? agentId;
+}
+
+function estimateAgentSpend(runs: readonly AgentRunRecord[]): string {
+  const estimate = runs.reduce((total, run) => total + (run.provider === "openai" ? 0.018 : run.provider === "xai" ? 0.014 : 0.004), 0);
+  return `$${estimate.toFixed(3)}`;
+}
+
+function agentPersonality(agentId: string): string {
+  if (agentId.includes("architect")) {
+    return "Systems designer: calm, picky, and allergic to brittle plans.";
+  }
+  if (agentId.includes("scout")) {
+    return "Forward scout: fast pivots, recon maps, and headset chatter.";
+  }
+  if (agentId.includes("byte")) {
+    return "Data analyst: terminal gremlin, tidy notes, suspiciously good memory.";
+  }
+  if (agentId.includes("ripper")) {
+    return "Ops mechanic: keeps scanners humming and tears apart messy signals.";
+  }
+  return "Lead OSINT operator: careful pivots, source discipline, and a tiny top hat.";
 }

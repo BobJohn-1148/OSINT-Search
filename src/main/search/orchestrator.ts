@@ -7,7 +7,7 @@
 import { randomUUID } from "node:crypto";
 import type { ObservationInput, SearchRunResult, SearchSeed, Observation, SourceStatus } from "../../shared/types/search.js";
 import { buildSearchRunResult } from "./correlation.js";
-import { fetchJson } from "./http.js";
+import { fetchJson, fetchText } from "./http.js";
 import type { SourceConnector } from "./source-connector.js";
 
 export interface SearchEventSink {
@@ -125,7 +125,7 @@ async function runConnectorWithTimeout(
     parentSignal?.addEventListener("abort", abortFromParent, { once: true });
   }
 
-  const runPromise = connector.run(seed, { fetchJson, signal: controller.signal });
+  const runPromise = connector.run(seed, { fetchJson, fetchText, signal: controller.signal });
   runPromise.catch(() => {});
   const timeout = timeoutAfter(timeoutMs, `${connector.label} timed out`, controller);
   try {

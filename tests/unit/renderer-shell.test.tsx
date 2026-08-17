@@ -3,7 +3,7 @@
  * real investigative surfaces arrive. If stubs cannot route and keep shell
  * state now, later feature tests will hide foundation regressions.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,8 +11,10 @@ import { MemoryRouter } from "react-router-dom";
 import { AppFrame } from "../../src/renderer/App";
 import { navigationRoutes } from "../../src/renderer/navigation";
 import type { Result } from "../../src/shared/result";
+import type { ScanOutputEvent } from "../../src/shared/schemas/scans";
 
 type RendererInvokeMock = (channel: string, request?: unknown) => Promise<Result<unknown>>;
+type ScanEventMock = (channel: "scan:output", handler: (event: ScanOutputEvent) => void) => () => void;
 
 function createDefaultInvokeMock() {
   return vi.fn<RendererInvokeMock>((channel) => {
@@ -21,6 +23,48 @@ function createDefaultInvokeMock() {
     }
     if (channel === "providers:list") {
       return Promise.resolve({ ok: true as const, value: { providers: [] } });
+    }
+    if (channel === "apiDiagnostics:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          apis: [
+            {
+              source: "openai",
+              label: "OpenAI",
+              category: "AI provider",
+              probe: "live",
+              requiresKey: true,
+              configured: false,
+              status: "skipped",
+              message: "Ready to test",
+              latencyMs: null,
+              checkedTs: "2026-08-10T10:00:00.000Z"
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "apiDiagnostics:test") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          results: [
+            {
+              source: "openai",
+              label: "OpenAI",
+              category: "AI provider",
+              probe: "live",
+              requiresKey: true,
+              configured: true,
+              status: "pass",
+              message: "OpenAI responded to the live health check",
+              latencyMs: 42,
+              checkedTs: "2026-08-10T10:00:01.000Z"
+            }
+          ]
+        }
+      });
     }
     if (channel === "agents:list") {
       return Promise.resolve({ ok: true as const, value: { agents: [] } });
@@ -91,7 +135,65 @@ function createDefaultInvokeMock() {
       });
     }
     if (channel === "mobile:detect") {
-      return Promise.resolve({ ok: true as const, value: { devices: [], unavailableTools: ["adb"] } });
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          devices: [
+            {
+              id: "ios-one",
+              platform: "ios",
+              label: "Bob's iPhone / iPhone16,2 (ios-one)",
+              connected: true,
+              dataTypes: [
+                {
+                  id: "ios-device-info",
+                  label: "Device info",
+                  sensitivity: "medium",
+                  description: "Trusted-pairing inventory.",
+                  commandPreview: ["ideviceinfo"]
+                }
+              ]
+            }
+          ],
+          unavailableTools: []
+        }
+      });
+    }
+    if (channel === "mobile:collect") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          deviceId: "ios-one",
+          platform: "ios",
+          completedTs: "2026-08-10T10:00:02.000Z",
+          results: [
+            {
+              dataTypeId: "ios-device-info",
+              label: "Device info",
+              sensitivity: "medium",
+              status: "passed",
+              commandPreview: ["ideviceinfo"],
+              stdout: "ProductType: iPhone16,2\nProductVersion: 18.6",
+              stderr: "",
+              summary: "Device info: captured 2 output lines.",
+              startedTs: "2026-08-10T10:00:01.000Z",
+              completedTs: "2026-08-10T10:00:02.000Z"
+            },
+            {
+              dataTypeId: "ios-syslog",
+              label: "Live syslog",
+              sensitivity: "sensitive",
+              status: "passed",
+              commandPreview: ["idevicesyslog"],
+              stdout: "## syslog sample\nAug 15 20:23:23.900727 kernel[0] <Notice>: vm: segments queued for swapout\nAug 15 20:23:23.928594 locationd[70983] <Debug>: skipping invalidated device\nAug 15 20:23:24.007528 InCallService[22286] <Info>: observer relay",
+              stderr: "",
+              summary: "Live syslog: captured 4 output lines.",
+              startedTs: "2026-08-10T10:00:01.000Z",
+              completedTs: "2026-08-10T10:00:03.000Z"
+            }
+          ]
+        }
+      });
     }
     if (channel === "social:analyze") {
       return Promise.resolve({
@@ -298,12 +400,15 @@ beforeEach(() => {
         "audit:query",
         "mobile:profiles",
         "mobile:detect",
+        "mobile:collect",
         "social:analyze",
         "methodology:list",
         "methodology:export",
         "keys:list",
         "providers:list",
         "agents:list",
+        "apiDiagnostics:list",
+        "apiDiagnostics:test",
         "agent:states",
         "agent:runs",
         "agent:memory:list",
@@ -380,7 +485,7 @@ it("renders every stub route and the settings route so the app boots and navigat
     } else if (route.id === "analyzers") {
       expect(screen.getByRole("button", { name: "Build dorks" })).toBeInTheDocument();
     } else if (route.id === "mobile") {
-      expect(screen.getByRole("button", { name: "Detect mobile devices" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Refresh phone detection" })).toBeInTheDocument();
     } else if (route.id === "social-analyzer") {
       expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
     } else if (route.id === "methodology-map") {
@@ -413,6 +518,53 @@ it("sidebar collapse state persists across reload so workspace chrome does not r
   );
 
   expect(screen.getByRole("button", { name: "Expand sidebar" })).toHaveAttribute("aria-expanded", "false");
+});
+
+it("mobile route detects a trusted phone and collects live metadata snapshots", async () => {
+  render(
+    <MemoryRouter initialEntries={["/mobile"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  expect((await screen.findAllByText("Bob's iPhone / iPhone16,2 (ios-one)")).length).toBeGreaterThan(0);
+  expect(screen.getByRole("navigation", { name: "Mobile sections" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Toolbox" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Verification Report/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Smart Flash/i })).toBeDisabled();
+  expect(screen.queryByRole("heading", { name: "Android" })).not.toBeInTheDocument();
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("mobile:collect", {
+      deviceId: "ios-one",
+      platform: "ios",
+      dataTypeIds: undefined
+    });
+  });
+  expect(await screen.findByText("Device info: captured 2 output lines.")).toBeInTheDocument();
+  expect(screen.getByText("ProductVersion")).toBeInTheDocument();
+  expect(screen.getAllByText("18.6").length).toBeGreaterThan(0);
+  expect(await screen.findByRole("table", { name: "syslog sample log events" })).toBeInTheDocument();
+  expect(screen.getByText("kernel[0]")).toBeInTheDocument();
+  expect(screen.getByText("vm: segments queued for swapout")).toBeInTheDocument();
+});
+
+it("social analyzer renders a dot graph and lets candidate dots focus the review queue", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/social-analyzer"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Analyze" }));
+
+  expect(await screen.findByRole("heading", { name: "Candidate graph" })).toBeInTheDocument();
+  await user.click(await screen.findByRole("button", { name: "Select Example social candidate" }));
+
+  expect(screen.getByPlaceholderText("Filter network or URL")).toHaveValue("Example social");
+  expect(screen.getByText("1 dots")).toBeInTheDocument();
 });
 
 it("search route saves a selected tree node to a case so search output becomes evidence", async () => {
@@ -493,7 +645,6 @@ it("search route saves a selected tree node to a case so search output becomes e
   );
 
   await user.click(screen.getByRole("button", { name: "Search" }));
-  await user.click(await screen.findByRole("button", { name: /example\.com from RDAP/i }));
   await user.click(screen.getByRole("button", { name: "Save node" }));
 
   await waitFor(() => {
@@ -574,7 +725,6 @@ it("search route sends a selected tree node to an agent so discoveries can conti
   );
 
   await user.click(screen.getByRole("button", { name: "Search" }));
-  await user.click(await screen.findByRole("button", { name: /example\.com from RDAP/i }));
   await user.click(screen.getByRole("button", { name: "Send to agent" }));
 
   await waitFor(() => {
@@ -588,6 +738,104 @@ it("search route sends a selected tree node to an agent so discoveries can conti
     );
   });
   expect(await screen.findByText("Sent to OSINT agent for Acme review")).toBeInTheDocument();
+});
+
+it("search route cross-references matching observations across sources before showing evidence", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "search:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: {
+            runId: "run-cross",
+            seed: { type: "domain", value: "example.com" },
+            startedTs: "2026-08-10T10:00:00.000Z",
+            completedTs: "2026-08-10T10:00:01.000Z",
+            statuses: [
+              { sourceId: "rdap", label: "RDAP", status: "returned", observationCount: 1 },
+              { sourceId: "crtsh", label: "crt.sh", status: "returned", observationCount: 1 },
+              { sourceId: "dns-doh", label: "DNS over HTTPS", status: "returned", observationCount: 1 }
+            ],
+            observations: [
+              {
+                id: "obs-rdap",
+                runId: "run-cross",
+                entity: "example.com",
+                type: "domain",
+                value: "example.com",
+                source: "rdap",
+                confidence: 2,
+                raw: { sourceUrl: "https://rdap.example.test/example.com" }
+              },
+              {
+                id: "obs-crtsh",
+                runId: "run-cross",
+                entity: "example.com",
+                type: "domain",
+                value: "example.com",
+                source: "crtsh",
+                confidence: 2,
+                raw: { sourceUrl: "https://crt.sh/?q=example.com" }
+              },
+              {
+                id: "obs-mail",
+                runId: "run-cross",
+                entity: "example.com",
+                type: "hostname",
+                value: "mail.example.com",
+                source: "dns-doh",
+                confidence: 1,
+                raw: {}
+              }
+            ],
+            entities: [
+              {
+                entity: "example.com",
+                type: "domain",
+                value: "example.com",
+                sourceIds: ["crtsh", "rdap"],
+                strength: 2,
+                band: "likely"
+              },
+              {
+                entity: "example.com",
+                type: "hostname",
+                value: "mail.example.com",
+                sourceIds: ["dns-doh"],
+                strength: 1,
+                band: "single-source"
+              }
+            ],
+            tree: {
+              id: "root",
+              label: "domain:example.com",
+              kind: "root",
+              saveable: true,
+              children: []
+            }
+          }
+        }
+      });
+    }
+    return createDefaultInvokeMock()(channel);
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Search" }));
+
+  expect(await screen.findByRole("heading", { name: "Cross-reference board" })).toBeInTheDocument();
+  expect(screen.getByText("2 independent sources reported the same domain: crtsh, rdap.")).toBeInTheDocument();
+  expect(screen.getAllByText("2 sources").length).toBeGreaterThan(0);
+  const mailButtons = screen.getAllByRole("button", { name: /mail\.example\.com/i });
+  expect(mailButtons.length).toBeGreaterThan(0);
+  await user.click(mailButtons[0]);
+  expect(screen.getByText("Only one source reported this fact. Treat it as a lead until another source agrees.")).toBeInTheDocument();
 });
 
 it("cases route renders timeline items so saved evidence can be verified", async () => {
@@ -718,7 +966,7 @@ it("network scan route renders topology nodes from scan results so parsed hosts 
             status: "succeeded",
             scanType: "quick-top-100",
             timing: "T3",
-            argv: ["nmap", "-oX", "-", "-T3", "192.168.1.0/24"],
+            argv: ["nmap", "-oX", "-", "192.168.1.0/24"],
             stdout: "<nmaprun />",
             stderr: "",
             startedTs: "2026-08-10T10:00:00.000Z",
@@ -773,6 +1021,65 @@ it("network scan route renders topology nodes from scan results so parsed hosts 
 
   expect(await screen.findByText("workstation.local (192.168.1.10)")).toBeInTheDocument();
   expect(screen.getByText("443/tcp https")).toBeInTheDocument();
+});
+
+it("network scan topology previews live nmap XML hosts before the scan process exits", async () => {
+  const user = userEvent.setup();
+  let scanHandler: ((event: ScanOutputEvent) => void) | null = null;
+  let resolveScan: ((value: Result<unknown>) => void) | null = null;
+  const liveXml = `<nmaprun><host><status state="up" reason="arp-response"/><address addr="10.0.0.1" addrtype="ipv4"/><address addr="70:13:01:CB:A7:4F" addrtype="mac" vendor="Vantiva - Connected Home"/><hostnames></hostnames></host></nmaprun>`;
+  const reacherMock = window.reacher as typeof window.reacher & { readonly onScanEvent: ReturnType<typeof vi.fn<ScanEventMock>> };
+
+  reacherMock.onScanEvent.mockImplementation((_channel, handler) => {
+    scanHandler = handler;
+    return vi.fn();
+  });
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "scan:run") {
+      return new Promise((resolve) => {
+        resolveScan = resolve;
+      });
+    }
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/network-scan"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(screen.getByRole("button", { name: "Run scan" }));
+  act(() => {
+    scanHandler?.({ scanId: "scan-live", stream: "stdout", chunk: liveXml });
+  });
+
+  expect((await screen.findAllByText("10.0.0.1")).length).toBeGreaterThanOrEqual(2);
+  expect(screen.getByText("hosts:1 open_ports:0 status:running-scan")).toBeInTheDocument();
+
+  act(() => {
+    resolveScan?.({
+      ok: true as const,
+      value: {
+        scan: {
+          id: "scan-live",
+          target: "10.0.0.0/24",
+          wslDistro: "Local Windows nmap",
+          status: "succeeded",
+          scanType: "quick-top-100",
+          timing: "T3",
+          argv: ["nmap", "-oX", "-", "--top-ports", "100", "10.0.0.0/24"],
+          stdout: liveXml,
+          stderr: "",
+          startedTs: "2026-08-10T10:00:00.000Z",
+          completedTs: "2026-08-10T10:00:01.000Z",
+          authorizationId: null
+        },
+        hosts: [],
+        topology: { scanId: "scan-live", nodes: [{ id: "target", label: "10.0.0.0/24", x: 0, y: 0, ring: 0 }], edges: [] }
+      }
+    });
+  });
 });
 
 it("analyzers route builds dorks and saves findings through IPC so query generation stays main-owned", async () => {
@@ -1101,6 +1408,167 @@ it("renders six connected methodology phases and stays read-only so the map cann
   const invokedChannels = invokeMock.mock.calls.map(([channel]) => channel);
   expect(invokedChannels.every((channel) => ["methodology:list", "methodology:export"].includes(channel))).toBe(true);
   expect(invokedChannels).not.toEqual(expect.arrayContaining(["tools:launch", "scan:run", "analyzer:pcap:import"]));
+});
+
+it("tools route launches a fake CLI run and renders captured output with run context", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "tools:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          tools: [
+            {
+              id: "sherlock",
+              name: "Sherlock",
+              description: "Username lookup across public social sites.",
+              installCommand: "pipx install sherlock-project",
+              officialLink: "https://github.com/sherlock-project/sherlock",
+              category: "username",
+              tier: "passive",
+              defaultArgs: ["sherlock"]
+            }
+          ]
+        }
+      });
+    }
+    if (channel === "tools:detect") {
+      return Promise.resolve({ ok: true as const, value: { installed: [{ toolId: "sherlock", installed: true }] } });
+    }
+    if (channel === "tools:launch") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: {
+            id: "tool-run-one",
+            toolId: "sherlock",
+            caseId: null,
+            target: "example.com",
+            wslDistro: "Ubuntu",
+            argv: ["wsl.exe", "-d", "Ubuntu", "--", "sherlock", "example.com"],
+            status: "succeeded",
+            stdout: "[+] GitHub: https://github.com/example\n[+] Reddit: https://reddit.com/user/example",
+            stderr: "",
+            startedTs: "2026-08-10T10:00:00.000Z",
+            completedTs: "2026-08-10T10:00:01.000Z",
+            authorizationId: null
+          }
+        }
+      });
+    }
+    return createDefaultInvokeMock()(channel);
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/tools"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Detect tools" }));
+  expect(await screen.findByText(/Detection complete/)).toBeInTheDocument();
+  expect(screen.getByText(/passive \/ username \/ installed/)).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Launch tool" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("tools:launch", {
+      toolId: "sherlock",
+      target: "example.com",
+      caseId: undefined,
+      wslDistro: "Ubuntu"
+    });
+  });
+  expect(await screen.findByText(/\[\+\] GitHub: https:\/\/github.com\/example/)).toBeInTheDocument();
+  expect(screen.getByText("run:tool-run-one status:succeeded target:example.com")).toBeInTheDocument();
+});
+
+it("audit log renders fake sensitive events and sends filter values through IPC", async () => {
+  const user = userEvent.setup();
+  invokeMock.mockImplementation((channel: string, request?: unknown) => {
+    if (channel === "audit:query") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          events: [
+            {
+              id: 1,
+              ts: "2026-08-10T10:00:00.000Z",
+              actor: "local-user",
+              action: "mobile.collect",
+              objectType: "mobile-device",
+              objectId: "ios-one",
+              sensitivity: "sensitive",
+              detail: {
+                platform: "ios",
+                sections: 8,
+                status: "passed",
+                requestEcho: request
+              }
+            },
+            {
+              id: 2,
+              ts: "2026-08-10T10:01:00.000Z",
+              actor: "local-user",
+              action: "scan.run",
+              objectType: "network-scan",
+              objectId: "scan-one",
+              sensitivity: "medium",
+              detail: { target: "10.0.0.0/24", hosts: 3 }
+            }
+          ]
+        }
+      });
+    }
+    return createDefaultInvokeMock()(channel);
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/audit-log"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByText("mobile.collect")).toBeInTheDocument();
+  expect(screen.getByText("mobile-device / ios-one / local-user")).toBeInTheDocument();
+  expect(screen.getByText("sections")).toBeInTheDocument();
+  expect(screen.getByText("8")).toBeInTheDocument();
+  expect(screen.getAllByText("scan.run").length).toBeGreaterThanOrEqual(2);
+
+  await user.clear(screen.getByLabelText("Action"));
+  await user.type(screen.getByLabelText("Action"), "scan.run");
+  await user.selectOptions(screen.getByLabelText("Sensitivity"), "medium");
+  await user.click(screen.getByRole("button", { name: "Apply filters" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenLastCalledWith(
+      "audit:query",
+      expect.objectContaining({ action: "scan.run", sensitivity: "medium", limit: 100 })
+    );
+  });
+});
+
+it("settings route tests all fake API diagnostics and shows per-API status without leaking secrets", async () => {
+  const user = userEvent.setup();
+
+  render(
+    <MemoryRouter initialEntries={["/settings"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  expect(await screen.findByRole("heading", { name: "API diagnostics" })).toBeInTheDocument();
+  expect(await screen.findByText("OpenAI")).toBeInTheDocument();
+  expect(await screen.findByText("Ready to test")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Test all APIs" }));
+
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("apiDiagnostics:test", {});
+  });
+  expect(await screen.findByText("OpenAI responded to the live health check")).toBeInTheDocument();
+  expect(screen.getByText("API diagnostics complete: 1/1 passed")).toBeInTheDocument();
+  expect(document.body.textContent).not.toMatch(/sk-[A-Za-z0-9]/);
 });
 
 it("no hex literals in renderer so visual color resolves through theme tokens", () => {

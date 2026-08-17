@@ -44,6 +44,8 @@ export function createSearchHandlers(
       runId: request.runId,
       signal: controller.signal,
       connectors,
+      connectorTimeoutMs: searchTimeoutForEffort(request.effort),
+      maxConcurrentConnectors: searchConcurrencyForEffort(request.effort),
       events: {
         runStarted: (runId, startedTs) => {
           activeRuns.set(runId, controller);
@@ -88,4 +90,24 @@ export function createSearchHandlers(
       return { runId: request.runId, cancelled: Boolean(controller) };
     }
   };
+}
+
+function searchTimeoutForEffort(effort: SearchRunRequest["effort"]): number {
+  if (effort === "low") {
+    return 20_000;
+  }
+  if (effort === "deep") {
+    return 120_000;
+  }
+  return 60_000;
+}
+
+function searchConcurrencyForEffort(effort: SearchRunRequest["effort"]): number {
+  if (effort === "deep") {
+    return 3;
+  }
+  if (effort === "low") {
+    return 7;
+  }
+  return 5;
 }

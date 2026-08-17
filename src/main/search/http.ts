@@ -27,6 +27,23 @@ export async function fetchJson(url: string, init?: RequestInit): Promise<unknow
   return response.json();
 }
 
+export async function fetchText(url: string, init?: RequestInit): Promise<string> {
+  const headers = new Headers(init?.headers);
+  headers.set("accept", "text/html,text/plain;q=0.9,*/*;q=0.5");
+  headers.set("user-agent", "Reacher local OSINT app");
+
+  const response = await fetch(url, {
+    ...init,
+    headers
+  });
+
+  if (!response.ok) {
+    throw new HttpLookupError(`HTTP ${response.status} from ${new URL(url).hostname}`);
+  }
+
+  return response.text();
+}
+
 export function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

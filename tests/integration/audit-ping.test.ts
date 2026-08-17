@@ -6,7 +6,7 @@
 import Database from "better-sqlite3";
 import { runMigrations } from "../../src/db/migrations/runner";
 import { AuditRepository } from "../../src/db/repositories/audit-repository";
-import { createSystemHandlers } from "../../src/main/ipc/handlers/system-handlers";
+import { createSystemHandlers, isUsableLocalIpv4 } from "../../src/main/ipc/handlers/system-handlers";
 
 it("records an audit event on ping so stub actions are observable", () => {
   const db = new Database(":memory:");
@@ -30,4 +30,13 @@ it("records an audit event on ping so stub actions are observable", () => {
       detail: { nonce: "dashboard" }
     }
   ]);
+});
+
+it("filters APIPA and loopback addresses out of local scan choices so network scans default to real LANs", () => {
+  expect(isUsableLocalIpv4("10.0.0.16")).toBe(true);
+  expect(isUsableLocalIpv4("192.168.1.20")).toBe(true);
+  expect(isUsableLocalIpv4("172.16.4.5")).toBe(true);
+  expect(isUsableLocalIpv4("169.254.198.172")).toBe(false);
+  expect(isUsableLocalIpv4("127.0.0.1")).toBe(false);
+  expect(isUsableLocalIpv4("0.0.0.0")).toBe(false);
 });

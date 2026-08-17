@@ -20,7 +20,9 @@
   --color-accent-border: rgb(73 169 255 / 48%);
   --color-accent-surface: rgb(73 169 255 / 12%);
   --color-positive: rgb(88 214 141);
+  --color-danger: rgb(255 92 122);
   --color-warning: rgb(247 194 88);
+  --color-warning-border: rgb(247 194 88 / 60%);
   --shadow-panel: 0 18px 48px rgb(0 0 0 / 28%);
   --radius-control: 6px;
   --sidebar-expanded: 248px;

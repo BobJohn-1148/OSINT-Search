@@ -106,7 +106,7 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
 
   assertIncludes("src/main/search/source-connector.ts", "SourceConnector", "connector interface documented");
   assertIncludes("src/main/search/connectors/index.ts", "searchConnectors", "passive connector registry");
-  assertIncludes("src/renderer/components/search-view.tsx", "Search this further", "pivot UI mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "search:pivot", "pivot UI mechanism");
 } else if (requestedPhase === 3) {
   assertIncludes("src/db/repositories/cases-repository.ts", "addItem", "case save mechanism");
   assertIncludes("src/renderer/components/search-view.tsx", "case:addItem", "save from search mechanism");
@@ -238,29 +238,30 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/main/scans/scan-service.ts", "buildNmapArgv", "nmap argv builder mechanism");
   assertIncludes("src/main/scans/scan-service.ts", "validateCustomArgs", "custom argv target guard mechanism");
   assertIncludes("src/main/scans/scan-service.ts", "\"-oX\"", "nmap XML stdout mechanism");
-  assertIncludes("src/main/scans/scan-service.ts", "findMatchingAuthorization", "exact target authorization mechanism");
+  assertIncludes("src/main/scans/scan-service.ts", "Local Windows nmap", "local Windows nmap scan mechanism");
   assertIncludes("src/main/scans/nmap-parser.ts", "parseNmapXml", "nmap XML parser mechanism");
   assertIncludes("src/main/scans/topology-layout.ts", "buildScanTopology", "deterministic topology mechanism");
   assertIncludes("src/db/repositories/scans-repository.ts", "finishRun", "scan host and port persistence mechanism");
   assertIncludes("src/main/reports/report-model.ts", "buildScanReportModel", "scan report model mechanism");
   assertIncludes("src/main/reports/report-model.ts", "Service list", "scan service list report mechanism");
   assertIncludes("src/main/reports/report-model.ts", "Address | Hostname | Status | Ports", "scan host table report mechanism");
-  assertIncludes("src/renderer/theme.css", "--xy-node-background-color-default", "React Flow theme token override");
+  assertIncludes("src/renderer/components/network-scan-view.tsx", "scan-cli-topology", "CLI topology theme mechanism");
   assertIncludes("src/main/reports/report-service.ts", "generateScanReport", "scan report export mechanism");
   assertIncludes("src/main/ipc/handlers/scan-handlers.ts", "scan:run", "scan run IPC handler");
   assertIncludes("src/shared/ipc.ts", "scan:topology", "scan topology IPC channel");
   assertIncludes("src/preload/preload.ts", "scan:output", "scan output event bridge");
-  assertIncludes("src/renderer/components/network-scan-view.tsx", "ReactFlow", "network scan topology renderer");
+  assertIncludes("src/renderer/components/network-scan-view.tsx", "CliTopology", "network scan topology renderer");
   assertIncludes("src/db/migrations/012-scans.ts", "scans", "scans migration table");
   assertIncludes("src/db/migrations/012-scans.ts", "hosts", "hosts migration table");
   assertIncludes("src/db/migrations/012-scans.ts", "ports", "ports migration table");
   assertAnyTestIncludes("parses nmap XML into hosts and ports", "parses nmap XML");
   assertAnyTestIncludes("lays out topology deterministically for identical input", "deterministic topology layout");
   assertAnyTestIncludes("network scan route renders topology nodes from scan results", "topology renders from scan result");
-  assertAnyTestIncludes("refuses an unauthorized scan", "unauthorized scan refused");
+  assertAnyTestIncludes("runs through local nmap without the old WSL authorization step", "local scan without stale authorization step");
   assertAnyTestIncludes("rejects custom nmap argv targets", "custom argv target guard");
   assertAnyTestIncludes("allows only approved target-neutral custom nmap flags", "custom argv safe allowlist");
-  assertAnyTestIncludes("runs an authorized scan and captures parsed hosts", "authorized scan parses hosts");
+  assertAnyTestIncludes("runs a local scan and captures parsed hosts", "local scan parses hosts");
+  assertAnyTestIncludes("network scan topology previews live nmap XML hosts before the scan process exits", "live topology preview parses nmap XML");
   assertAnyTestIncludes("export includes the topology host table and service list", "scan export includes topology host table service list");
 } else if (requestedPhase === 9) {
   assertIncludes("src/main/analyzers/analyzers-service.ts", "wevtutil.exe", "EVTX fixed Windows import mechanism");
@@ -384,7 +385,7 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("src/main/mobile/mobile-service.ts", "shell: false", "mobile probes use shell false");
   assertIncludes("src/main/ipc/handlers/mobile-handlers.ts", "mobile:detect", "mobile IPC handler mechanism");
   assertIncludes("src/shared/ipc.ts", "mobile:profiles", "mobile IPC channel mechanism");
-  assertIncludes("src/renderer/components/mobile-view.tsx", "Detect mobile devices", "mobile route surface mechanism");
+  assertIncludes("src/renderer/components/mobile-view.tsx", "Detect phone", "mobile route surface mechanism");
   assertAnyTestIncludes("detects Android and iOS devices through fixed local probes", "mobile fixed probe behavior");
   assertAnyTestIncludes("reports missing mobile tools without crashing", "mobile missing tools fallback");
 

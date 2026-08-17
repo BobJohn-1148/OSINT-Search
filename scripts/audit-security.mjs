@@ -159,7 +159,7 @@ if (!preloadText.includes("tools:output")) {
 }
 
 const scanServiceText = read(path.join(srcRoot, "main", "scans", "scan-service.ts"));
-for (const required of ["findMatchingAuthorization", "tier: \"active\"", "buildNmapArgv", "\"-oX\"", "\"-\"", "parseNmapXml", "auditRepository.record", "validateCustomArgs", "safeFlags", "approved target-neutral flags"]) {
+for (const required of ["Local Windows nmap", "authorizationId: null", "buildNmapArgv", "\"-oX\"", "\"-\"", "parseNmapXml", "auditRepository.record", "resolveLocalNmapCommand", "shell: false", "validateCustomArgs", "safeFlags", "approved target-neutral flags"]) {
   if (!scanServiceText.includes(required)) {
     fail(`scan service is missing ${required}`);
   }

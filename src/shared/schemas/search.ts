@@ -69,7 +69,8 @@ export const searchRunResultSchema = z.object({
 
 export const searchRunRequestSchema = z.object({
   seed: searchSeedSchema,
-  runId: z.string().min(1).optional()
+  runId: z.string().min(1).optional(),
+  effort: z.enum(["low", "standard", "deep"]).default("standard")
 });
 
 export const searchRunResponseSchema = z.object({
@@ -78,7 +79,8 @@ export const searchRunResponseSchema = z.object({
 
 export const searchPivotRequestSchema = z.object({
   seed: searchSeedSchema,
-  runId: z.string().min(1).optional()
+  runId: z.string().min(1).optional(),
+  effort: z.enum(["low", "standard", "deep"]).default("standard")
 });
 
 export const searchPivotResponseSchema = searchRunResponseSchema;

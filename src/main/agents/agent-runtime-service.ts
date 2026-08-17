@@ -35,7 +35,12 @@ export class AgentRuntimeService {
     private readonly now = () => new Date()
   ) {}
 
-  public async run(input: { readonly agentId: string; readonly seed: AgentSeed; readonly caseId?: string }): Promise<{
+  public async run(input: {
+    readonly agentId: string;
+    readonly seed: AgentSeed;
+    readonly caseId?: string;
+    readonly missionBrief?: string;
+  }): Promise<{
     readonly run: AgentRunRecord;
     readonly finding: AgentFinding;
   }> {
@@ -49,12 +54,17 @@ export class AgentRuntimeService {
     return this.runtimeRepository.currentStates(this.agentsRepository.list().map((agent) => agent.id), nowTs);
   }
 
-  private execute(input: { readonly agentId: string; readonly seed: AgentSeed; readonly caseId?: string }) {
+  private execute(input: {
+    readonly agentId: string;
+    readonly seed: AgentSeed;
+    readonly caseId?: string;
+    readonly missionBrief?: string;
+  }) {
     const agent = this.agentsRepository.get(input.agentId);
     const prompt = this.readPrompt(agent.promptPath);
     const batcher = new AgentEventBatcher(this.emitBatch);
     const startedTs = this.now().toISOString();
-    const caseId = input.caseId ?? this.casesRepository.create(`Agent findings for ${input.seed.value}`, ["agents"]).id;
+    const caseId = input.caseId ?? this.casesRepository.create(defaultAgentCaseTitle(input.seed), ["agents"]).id;
     const run = this.runtimeRepository.startRun({
       agentId: agent.id,
       caseId,
@@ -67,20 +77,20 @@ export class AgentRuntimeService {
       const state: AgentLiveState = {
         agentId: agent.id,
         status: "working",
-        task: `running Sherlock on ${input.seed.value}`,
+        task: input.missionBrief ? `brief: ${input.missionBrief.slice(0, 80)}` : `running Sherlock on ${input.seed.value}`,
         lastRunId: run.id,
         updatedTs: startedTs
       };
       batcher.push({ type: "agent:state", state });
 
       const memoryCount = this.runtimeRepository.listMemory(undefined, 50).length;
-      for (const step of this.buildSteps(run.id, agent.id, input.seed, prompt, memoryCount)) {
+      for (const step of this.buildSteps(run.id, agent.id, input.seed, prompt, memoryCount, input.missionBrief)) {
         const parsed = STEP_FORMAT.parse(step);
         this.runtimeRepository.appendStep(parsed, this.now().toISOString());
         batcher.push({ type: "agent:step", step: parsed });
       }
 
-      const finding = this.createCitedFinding(run.id, agent.id, input.seed, caseId);
+      const finding = this.createCitedFinding(run.id, agent.id, input.seed, caseId, input.missionBrief);
       const result = this.runtimeRepository.atomic(() => {
         const savedItem = this.casesRepository.addItem({
           caseId,
@@ -89,7 +99,12 @@ export class AgentRuntimeService {
           title: finding.title,
           text: finding.summary,
           sourceTs: this.now().toISOString(),
-          metadata: { entity: input.seed.value, strength: finding.confidence, sources: finding.sources }
+          metadata: {
+            entity: input.seed.value,
+            strength: finding.confidence,
+            sources: finding.sources,
+            missionBrief: input.missionBrief ?? null
+          }
         });
         const savedFinding = agentFindingSchema.parse({ ...finding, savedItemId: savedItem.id });
         this.runtimeRepository.appendMemory({
@@ -108,7 +123,7 @@ export class AgentRuntimeService {
           objectType: "agent_run",
           objectId: run.id,
           sensitivity: "medium",
-          detail: { agentId: agent.id, seedType: input.seed.type, savedItemId: savedItem.id }
+          detail: { agentId: agent.id, seedType: input.seed.type, savedItemId: savedItem.id, missionBrief: input.missionBrief ?? null }
         });
         return { savedFinding, finished };
       });
@@ -140,7 +155,14 @@ export class AgentRuntimeService {
     }
   }
 
-  private buildSteps(runId: string, agentId: string, seed: AgentSeed, prompt: string, memoryCount: number): AgentStep[] {
+  private buildSteps(
+    runId: string,
+    agentId: string,
+    seed: AgentSeed,
+    prompt: string,
+    memoryCount: number,
+    missionBrief?: string
+  ): AgentStep[] {
     return [
       {
         runId,
@@ -148,7 +170,7 @@ export class AgentRuntimeService {
         sequence: 1,
         title: "Load prompt and memory",
         status: "complete",
-        summary: `Loaded ${prompt.length} prompt characters and ${memoryCount} memory rows.`,
+        summary: `Loaded ${prompt.length} prompt characters, ${memoryCount} memory rows${missionBrief ? ", and one mission brief" : ""}.`,
         next: "Normalize seed",
         sources: ["planning/agent-prompts/osint-agent.md"]
       },
@@ -166,23 +188,30 @@ export class AgentRuntimeService {
         runId,
         agentId,
         sequence: 3,
-        title: "Create cited finding",
+        title: missionBrief ? "Apply mission brief" : "Create cited finding",
         status: "complete",
-        summary: `Prepared a cited finding for ${seed.value}.`,
+        summary: missionBrief ?? `Prepared a cited finding for ${seed.value}.`,
         next: null,
         sources: [`passive:${seed.type}:${seed.value}`]
       }
     ];
   }
 
-  private createCitedFinding(runId: string, agentId: string, seed: AgentSeed, caseId: string | null): AgentFinding {
+  private createCitedFinding(
+    runId: string,
+    agentId: string,
+    seed: AgentSeed,
+    caseId: string | null,
+    missionBrief?: string
+  ): AgentFinding {
+    const briefSummary = missionBrief ? ` Mission brief: ${missionBrief}` : "";
     return agentFindingSchema.parse({
       id: randomUUID(),
       runId,
       agentId,
       caseId,
       title: `OSINT lead for ${seed.value}`,
-      summary: `${seed.value} is ready for passive correlation from ${seed.type} sources.`,
+      summary: `${seed.value} is ready for passive correlation from ${seed.type} sources.${briefSummary}`,
       sources: [`passive:${seed.type}:${seed.value}`],
       confidence: 1,
       savedItemId: null
@@ -192,4 +221,14 @@ export class AgentRuntimeService {
   private readPrompt(promptPath: string): string {
     return fs.readFileSync(path.join(this.repoRoot, promptPath), "utf8");
   }
+}
+
+export function defaultAgentCaseTitle(seed: AgentSeed): string {
+  const normalizedValue = seed.value.trim();
+  const safeValue = looksLikeInstructionText(normalizedValue) ? "" : normalizedValue.slice(0, 80);
+  return safeValue ? `Agent findings: ${seed.type} ${safeValue}` : `Agent findings: ${seed.type}`;
+}
+
+function looksLikeInstructionText(value: string): boolean {
+  return value.length > 80 || /\b(?:mission brief|cite sources|save only|evidence-backed|follow the|find public evidence)\b/i.test(value);
 }
