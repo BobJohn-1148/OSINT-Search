@@ -1,0 +1,63 @@
+/**
+ * Theme values are named tokens because renderer components must describe intent,
+ * not pick colors ad hoc. If routes used raw colors directly, later branding and
+ * the phase audit could not prove the console palette is applied consistently.
+ * Motion (duration/easing) tokens live here for the same reason: every transition
+ * and keyframe in styles.css draws from one shared rhythm instead of scattered
+ * magic-number durations that drift out of sync surface by surface.
+ */
+:root {
+  --font-ui: Inter, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --color-app: rgb(8 11 14);
+  --color-app-sheen: rgb(255 255 255 / 3%);
+  --color-transparent: rgb(255 255 255 / 0%);
+  --color-surface: rgb(17 20 23);
+  --color-surface-raised: rgb(26 30 34);
+  --color-border: rgb(59 65 70);
+  --color-border-strong: rgb(97 106 112);
+  --color-text: rgb(237 239 235);
+  --color-text-muted: rgb(166 172 169);
+  --color-accent: rgb(50 204 171);
+  --color-accent-strong: rgb(122 237 210);
+  --color-accent-border: rgb(50 204 171 / 48%);
+  --color-accent-surface: rgb(50 204 171 / 12%);
+  --color-positive: rgb(116 212 135);
+  --color-positive-strong: rgb(171 236 181);
+  --color-positive-border: rgb(116 212 135 / 42%);
+  --color-negative: rgb(230 111 111);
+  --color-negative-strong: rgb(244 155 155);
+  --color-negative-border: rgb(230 111 111 / 46%);
+  --color-warning: rgb(245 176 66);
+  --color-warning-strong: rgb(255 205 112);
+  --color-warning-border: rgb(245 176 66 / 46%);
+  --color-reference-strong: rgb(197 181 255);
+  --color-reference-border: rgb(167 139 250 / 48%);
+  --color-methodology-phase: rgb(18 21 23);
+  --color-methodology-tool: rgb(12 15 17);
+  --color-methodology-selected-start: rgb(50 204 171 / 18%);
+  --color-methodology-selected-end: rgb(245 176 66 / 5%);
+  --shadow-panel: 0 18px 48px rgb(0 0 0 / 28%);
+  --radius-control: 6px;
+  --sidebar-expanded: 248px;
+  --sidebar-collapsed: 76px;
+  --duration-fast: 110ms;
+  --duration-base: 160ms;
+  --duration-slow: 320ms;
+  --duration-lazy: 2200ms;
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --xy-node-background-color-default: var(--color-surface-raised);
+  --xy-node-color-default: var(--color-text);
+  --xy-node-border-default: 1px solid var(--color-accent-border);
+  --xy-edge-stroke-default: var(--color-accent);
+  --xy-edge-stroke-width-default: 1.5;
+  --xy-controls-button-background-color-default: var(--color-surface);
+  --xy-controls-button-background-color-hover-default: var(--color-surface-raised);
+  --xy-controls-button-color-default: var(--color-text);
+  --xy-controls-button-color-hover-default: var(--color-accent-strong);
+  --xy-controls-button-border-color-default: var(--color-border);
+  --xy-background-color-default: var(--color-app);
+  --xy-background-pattern-dots-color-default: var(--color-border);
+}
