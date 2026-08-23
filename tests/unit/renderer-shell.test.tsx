@@ -1741,6 +1741,7 @@ it("tools route detects, launches, and adds fake catalog entries without real WS
   await user.click(screen.getByRole("button", { name: "Launch tool" }));
   expect(await screen.findByText(/fake sherlock output for example\.com/)).toBeInTheDocument();
 
+  await user.click(screen.getByRole("button", { name: "Add or edit" }));
   await user.click(screen.getByRole("button", { name: "New catalog entry" }));
   await user.type(screen.getByLabelText("Name"), "Fake OSINT Tool");
   await user.type(screen.getByLabelText("Description"), "Fake test-only catalog entry.");

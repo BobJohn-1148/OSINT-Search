@@ -32,6 +32,22 @@ export function DashboardView() {
   const [showWatchForm, setShowWatchForm] = useState(false);
   const [status, setStatus] = useState("Monitoring ready");
   const [loadingLabel, setLoadingLabel] = useState("Loading dashboard");
+  const [reachability, setReachability] = useState<Record<string, boolean | null>>({});
+
+  /**
+   * Fired without awaiting so a slow or unreachable site never delays the
+   * rest of the dashboard load -- each row's light updates independently as
+   * its own check resolves. Only domain watches have a "site" to reach.
+   */
+  const checkReachability = useCallback((list: readonly WatchRecord[]): void => {
+    for (const watch of list.filter((entry) => entry.type === "domain")) {
+      void invoke("watch:reachability", { watchId: watch.id }).then((result) => {
+        if (result.ok) {
+          setReachability((current) => ({ ...current, [watch.id]: result.value.online }));
+        }
+      });
+    }
+  }, [invoke]);
 
   const refresh = useCallback(async () => {
     setLoadingLabel("Loading dashboard");
@@ -47,6 +63,7 @@ export function DashboardView() {
     if (watchResult.ok) {
       setWatches(watchResult.value.watches);
       setAlerts(watchResult.value.alerts);
+      checkReachability(watchResult.value.watches);
     }
     if (exposureResult.ok) {
       setExposures(exposureResult.value.exposures);
@@ -56,7 +73,7 @@ export function DashboardView() {
       setCaseId((current) => current || casesResult.value.cases[0]?.id || "");
     }
     setLoadingLabel("");
-  }, [invoke]);
+  }, [invoke, checkReachability]);
 
   useEffect(() => {
     const loadTimer = window.setTimeout(() => {
@@ -246,9 +263,30 @@ export function DashboardView() {
                   {watch.type === "domain" ? <Globe size={14} aria-hidden="true" /> : <Mail size={14} aria-hidden="true" />}
                   {watch.type}
                 </span>
-                <span className="watchlist-target" role="cell">{watch.value}</span>
+                <span className="watchlist-target" role="cell">
+                  {watch.type === "domain" ? (
+                    <span
+                      className={`status-dot ${reachabilityDotClass(reachability[watch.id])}`}
+                      aria-hidden="true"
+                      title={reachabilityLabel(reachability[watch.id])}
+                    />
+                  ) : null}
+                  {watch.value}
+                </span>
                 <span className="status-text" role="cell">{formatWhen(watch.lastCheckedTs)}</span>
                 <span className="watchlist-row-actions" role="cell">
+                  {watch.type === "domain" ? (
+                    <a
+                      className="icon-button"
+                      href={`https://${watch.value}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Open ${watch.value} in browser`}
+                      title="View in browser"
+                    >
+                      <ExternalLink size={15} aria-hidden="true" />
+                    </a>
+                  ) : null}
                   <button className="action-button" type="button" onClick={() => void checkNow(watch)}>
                     <Eye size={15} />
                     Check now
@@ -445,6 +483,26 @@ function FleetDonut({ pct }: { readonly pct: number }) {
       <text x="60" y="76" className="fleet-donut-caption">fleet usage</text>
     </svg>
   );
+}
+
+function reachabilityDotClass(online: boolean | null | undefined): string {
+  if (online === true) {
+    return "status-dot-verified";
+  }
+  if (online === false) {
+    return "status-dot-error";
+  }
+  return "status-dot-untested";
+}
+
+function reachabilityLabel(online: boolean | null | undefined): string {
+  if (online === true) {
+    return "Site is reachable";
+  }
+  if (online === false) {
+    return "Site is unreachable";
+  }
+  return "Checking site status...";
 }
 
 function agentLightClass(status: string): string {

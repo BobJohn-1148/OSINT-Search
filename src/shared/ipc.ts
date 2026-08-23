@@ -106,6 +106,8 @@ import {
   watchCheckNowResponseSchema,
   watchExposuresRequestSchema,
   watchExposuresResponseSchema,
+  watchReachabilityRequestSchema,
+  watchReachabilityResponseSchema,
   watchListRequestSchema,
   watchListResponseSchema,
   watchRemoveRequestSchema,
@@ -727,6 +729,14 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Lists stored breach exposures for all or one watch target."
+  }),
+  "watch:reachability": defineChannel({
+    request: watchReachabilityRequestSchema,
+    response: watchReachabilityResponseSchema,
+    capability: "monitoring.read",
+    sensitivity: "low",
+    mutates: false,
+    summary: "Live-checks whether a domain watch target is currently reachable; null for non-domain watches."
   }),
   "mobile:profiles": defineChannel({
     request: mobileProfilesRequestSchema,

@@ -70,6 +70,9 @@ export const watchCheckNowResponseSchema = z.object({
 export const watchExposuresRequestSchema = z.object({ watchId: z.string().min(1).optional() });
 export const watchExposuresResponseSchema = z.object({ exposures: z.array(exposureRecordSchema) });
 
+export const watchReachabilityRequestSchema = z.object({ watchId: z.string().min(1) });
+export const watchReachabilityResponseSchema = z.object({ online: z.boolean().nullable() });
+
 export type WatchRecord = z.infer<typeof watchRecordSchema>;
 export type ExposureRecord = z.infer<typeof exposureRecordSchema>;
 export type MonitoringAlert = z.infer<typeof monitoringAlertSchema>;
@@ -82,3 +85,5 @@ export type WatchCheckNowRequest = z.infer<typeof watchCheckNowRequestSchema>;
 export type WatchCheckNowResponse = z.infer<typeof watchCheckNowResponseSchema>;
 export type WatchExposuresRequest = z.infer<typeof watchExposuresRequestSchema>;
 export type WatchExposuresResponse = z.infer<typeof watchExposuresResponseSchema>;
+export type WatchReachabilityRequest = z.infer<typeof watchReachabilityRequestSchema>;
+export type WatchReachabilityResponse = z.infer<typeof watchReachabilityResponseSchema>;

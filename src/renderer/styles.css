@@ -1297,6 +1297,12 @@ select option:hover {
   overflow-wrap: anywhere;
 }
 
+.watchlist-target .status-dot {
+  display: inline-block;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 .watchlist-row-actions {
   display: inline-grid;
   grid-auto-flow: column;
@@ -1476,9 +1482,13 @@ select option:hover {
 
 .dashboard-watch-form {
   display: grid;
-  grid-template-columns: minmax(120px, 160px) minmax(180px, 1fr) minmax(160px, 220px) auto;
+  grid-template-columns: minmax(120px, 160px) minmax(180px, 1fr) minmax(160px, 220px);
   align-items: end;
   gap: 12px;
+}
+
+.dashboard-watch-form .action-button {
+  grid-column: 1 / -1;
 }
 
 .dashboard-watch-row {
@@ -3577,14 +3587,12 @@ select option:hover {
   min-width: 0;
 }
 
-/* MITRE-style category board: one scrolling column per catalog category. */
+/* MITRE-style category board: a vertical stack of full-width category
+   sections, each an auto-fill card grid, so 19 categories read as one
+   scrollable page instead of forcing horizontal scroll to see them all. */
 .tools-mitre-board {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(190px, 1fr);
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 6px;
+  gap: 20px;
 }
 
 .mitre-column {
@@ -3616,6 +3624,7 @@ select option:hover {
 
 .mitre-column-cards {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   gap: 6px;
 }
 

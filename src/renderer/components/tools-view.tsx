@@ -57,6 +57,7 @@ export function ToolsView() {
   const [runningToolId, setRunningToolId] = useState<string | null>(null);
   const [dockOpen, setDockOpen] = useState(false);
   const [dockMinimized, setDockMinimized] = useState(false);
+  const [showCatalogForm, setShowCatalogForm] = useState(false);
 
   const requestedToolId = searchParams.get("tool") ?? "";
 
@@ -323,39 +324,61 @@ export function ToolsView() {
                 <span className="tool-card-kicker">Catalog showcase</span>
                 <h2 className="section-title">{draft.id ? "Edit selected entry" : "Add catalog entry"}</h2>
               </div>
-              <button className="icon-button" type="button" aria-label="New catalog entry" title="New catalog entry" onClick={() => setDraft(emptyDraft)}>
-                <Plus size={16} aria-hidden="true" />
-              </button>
-            </div>
-            <div className="catalog-showcase-grid">
-              <CatalogField label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
-              <CatalogField label="Description" value={draft.description} onChange={(value) => setDraft((current) => ({ ...current, description: value }))} />
-              <CatalogField label="Install" value={draft.installCommand} onChange={(value) => setDraft((current) => ({ ...current, installCommand: value }))} />
-              <CatalogField label="Link" value={draft.officialLink} onChange={(value) => setDraft((current) => ({ ...current, officialLink: value }))} />
-              <CatalogField label="Argv prefix" value={draft.defaultArgsText} onChange={(value) => setDraft((current) => ({ ...current, defaultArgsText: value }))} />
-              <div className="tools-edit-row">
-                <label className="compact-field">
-                  Category
-                  <select className="field-control" value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value as ToolCategory }))}>
-                    {toolCategoryValues.map((item) => (
-                      <option key={item} value={item}>{item}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="compact-field">
-                  Tier
-                  <select className="field-control" value={draft.tier} onChange={(event) => setDraft((current) => ({ ...current, tier: event.target.value as ToolTier }))}>
-                    {tierOptions.map((tier) => (
-                      <option key={tier} value={tier}>{tier}</option>
-                    ))}
-                  </select>
-                </label>
+              <div className="action-row">
+                {showCatalogForm ? (
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="New catalog entry"
+                    title="New catalog entry"
+                    onClick={() => setDraft(emptyDraft)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
+                  </button>
+                ) : null}
+                <button
+                  className="action-button"
+                  type="button"
+                  aria-expanded={showCatalogForm}
+                  onClick={() => setShowCatalogForm((open) => !open)}
+                >
+                  {showCatalogForm ? "Hide" : "Add or edit"}
+                </button>
               </div>
             </div>
-            <button className="action-button primary-action" type="button" onClick={() => void saveDraft()}>
-              <Save size={16} aria-hidden="true" />
-              {draft.id ? "Save catalog entry" : "Add catalog entry"}
-            </button>
+            {showCatalogForm ? (
+              <>
+                <div className="catalog-showcase-grid">
+                  <CatalogField label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
+                  <CatalogField label="Description" value={draft.description} onChange={(value) => setDraft((current) => ({ ...current, description: value }))} />
+                  <CatalogField label="Install" value={draft.installCommand} onChange={(value) => setDraft((current) => ({ ...current, installCommand: value }))} />
+                  <CatalogField label="Link" value={draft.officialLink} onChange={(value) => setDraft((current) => ({ ...current, officialLink: value }))} />
+                  <CatalogField label="Argv prefix" value={draft.defaultArgsText} onChange={(value) => setDraft((current) => ({ ...current, defaultArgsText: value }))} />
+                  <div className="tools-edit-row">
+                    <label className="compact-field">
+                      Category
+                      <select className="field-control" value={draft.category} onChange={(event) => setDraft((current) => ({ ...current, category: event.target.value as ToolCategory }))}>
+                        {toolCategoryValues.map((item) => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="compact-field">
+                      Tier
+                      <select className="field-control" value={draft.tier} onChange={(event) => setDraft((current) => ({ ...current, tier: event.target.value as ToolTier }))}>
+                        {tierOptions.map((tier) => (
+                          <option key={tier} value={tier}>{tier}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </div>
+                <button className="action-button primary-action" type="button" onClick={() => void saveDraft()}>
+                  <Save size={16} aria-hidden="true" />
+                  {draft.id ? "Save catalog entry" : "Add catalog entry"}
+                </button>
+              </>
+            ) : null}
           </section>
         </aside>
       </div>

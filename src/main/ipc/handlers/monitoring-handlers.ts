@@ -11,6 +11,8 @@ import type {
   WatchExposuresRequest,
   WatchExposuresResponse,
   WatchListResponse,
+  WatchReachabilityRequest,
+  WatchReachabilityResponse,
   WatchRemoveRequest,
   WatchRemoveResponse
 } from "../../../shared/schemas/monitoring.js";
@@ -27,6 +29,8 @@ export function createMonitoringHandlers(monitoringService: MonitoringService) {
       monitoringService.checkNow(request),
     "watch:exposures": (request: WatchExposuresRequest): WatchExposuresResponse => ({
       exposures: monitoringService.exposures(request.watchId)
-    })
+    }),
+    "watch:reachability": (request: WatchReachabilityRequest): Promise<WatchReachabilityResponse> =>
+      monitoringService.checkReachability(request.watchId)
   };
 }

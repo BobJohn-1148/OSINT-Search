@@ -21,6 +21,7 @@ import type {
 import type { Observation, SearchRunResult, SourceStatus } from "../../shared/types/search.js";
 import { buildSearchRunResult } from "../search/correlation.js";
 import { fetchJson } from "../search/http.js";
+import { checkSiteReachable } from "./site-reachability.js";
 import { credentialSources, type CredentialSource } from "./credential-sources.js";
 
 export type MonitoringFetcher = typeof fetchJson;
@@ -37,7 +38,8 @@ export class MonitoringService {
     private readonly vaultRepository: VaultRepository,
     private readonly sources: readonly CredentialSource[] = credentialSources,
     private readonly fetcher: MonitoringFetcher = fetchJson,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly reachabilityChecker: (domain: string) => Promise<boolean> = checkSiteReachable
   ) {}
 
   public addWatch(request: WatchAddRequest): WatchRecord {
@@ -82,6 +84,14 @@ export class MonitoringService {
 
   public exposures(watchId?: string): ExposureRecord[] {
     return this.monitoringRepository.listExposures(watchId);
+  }
+
+  public async checkReachability(watchId: string): Promise<{ readonly online: boolean | null }> {
+    const watch = this.monitoringRepository.getWatch(watchId);
+    if (watch?.type !== "domain") {
+      return { online: null };
+    }
+    return { online: await this.reachabilityChecker(watch.value) };
   }
 
   public async checkNow(request: WatchCheckNowRequest): Promise<WatchCheckNowResponse> {
