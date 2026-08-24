@@ -60,6 +60,30 @@ it("turns answers into per-record observations and strips the trailing root dot"
   ]);
 });
 
+it("keeps the other four record types' observations when exactly one record type's lookup rejects", async () => {
+  const observations = await dnsDohConnector.run(seed, {
+    fetchJson: (url) => {
+      const recordType = new URL(url).searchParams.get("type");
+      if (recordType === "TXT") {
+        return Promise.reject(new Error("Cloudflare 502"));
+      }
+      return Promise.resolve(recordType === "A" ? dnsAnswer("93.184.216.34") : { Status: 0 });
+    }
+  });
+
+  expect(observations).toEqual([
+    { entity: "example.com", type: "dns-a", value: "93.184.216.34", source: "dns-doh", raw: { recordType: "A", ttl: 300 } }
+  ]);
+});
+
+it("still throws when every record type's lookup rejects, so the source is reported failed instead of silently empty", async () => {
+  await expect(
+    dnsDohConnector.run(seed, {
+      fetchJson: () => Promise.reject(new Error("Cloudflare unreachable"))
+    })
+  ).rejects.toThrow("Cloudflare unreachable");
+});
+
 it("still defaults to application/json for a caller that does not ask for anything, so other connectors are untouched", async () => {
   let sentAccept: string | null = null;
   const originalFetch = global.fetch;

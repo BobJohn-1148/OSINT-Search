@@ -103,6 +103,30 @@ it("reuses the one open case across searches instead of minting a case per Enter
   expect(calls[0].caseId).toBe(calls[1].caseId);
 });
 
+it("does not mint two cases when two searches with no open case finish at the same time", async () => {
+  const calls: AgentRunInput[] = [];
+  const { casesRepository, handlers } = await harness((input) => {
+    calls.push(input);
+    return Promise.resolve(undefined);
+  });
+
+  // Both requests start before either finishes, so their completions land in
+  // the same batch of pending promise continuations -- the shape a
+  // check-then-act race would need. activeCaseId's list()/create() calls are
+  // synchronous (better-sqlite3), so Node's single-threaded event loop cannot
+  // interleave one call's list() with another's create(); this pins that
+  // guarantee against a regression (e.g. an accidental await inserted into
+  // activeCaseId) rather than re-deriving it from reasoning alone.
+  await Promise.all([
+    handlers["search:run"]({ seed: { type: "domain", value: "example.com" }, runId: "run-concurrent-one" }),
+    handlers["search:run"]({ seed: { type: "domain", value: "other.com" }, runId: "run-concurrent-two" })
+  ]);
+
+  expect(casesRepository.list()).toHaveLength(1);
+  expect(calls).toHaveLength(2);
+  expect(calls[0].caseId).toBe(calls[1].caseId);
+});
+
 it("routes findings into a case the investigator already opened rather than creating its own", async () => {
   const calls: AgentRunInput[] = [];
   const { casesRepository, handlers } = await harness((input) => {

@@ -21,7 +21,13 @@ export const dnsDohConnector: SourceConnector = {
     return seedType === "domain";
   },
   async run(seed: SearchSeed, context: SourceRunContext): Promise<readonly ObservationInput[]> {
-    const results = await Promise.all(
+    // allSettled, not all: one record type erroring (a transient 5xx, a type
+    // Cloudflare rejects) must not discard the other four record types that
+    // already resolved. Only if every lookup fails do we re-throw, so the
+    // orchestrator still reports this source as failed instead of silently
+    // succeeding with zero observations, which would look identical to "this
+    // domain genuinely has no DNS records."
+    const settled = await Promise.allSettled(
       DNS_TYPES.map(async (recordType) => {
         const url = new URL("https://cloudflare-dns.com/dns-query");
         url.searchParams.set("name", seed.value);
@@ -36,7 +42,13 @@ export const dnsDohConnector: SourceConnector = {
       })
     );
 
-    return dedupeObservations(results.flat());
+    const fulfilled = settled.filter(isFulfilled);
+    if (fulfilled.length === 0) {
+      const firstRejection = settled.find(isRejected);
+      throw firstRejection?.reason instanceof Error ? firstRejection.reason : new Error("All DNS-over-HTTPS lookups failed");
+    }
+
+    return dedupeObservations(fulfilled.flatMap((result) => result.value));
   }
 };
 
@@ -73,6 +85,14 @@ function cleanDnsData(recordType: string, value: string): string {
   }
 
   return value.endsWith(".") ? value.slice(0, -1) : value;
+}
+
+function isFulfilled<T>(result: PromiseSettledResult<T>): result is PromiseFulfilledResult<T> {
+  return result.status === "fulfilled";
+}
+
+function isRejected(result: PromiseSettledResult<unknown>): result is PromiseRejectedResult {
+  return result.status === "rejected";
 }
 
 function dedupeObservations(observations: readonly ObservationInput[]): ObservationInput[] {
