@@ -51,7 +51,7 @@ it("github connector turns a public profile into cited identity facts with a piv
 it("github connector returns empty for an unknown user instead of failing the source", async () => {
   const observations = await githubUserConnector.run(
     { type: "username", value: "definitely-not-a-real-user" },
-    contextThrowing(new HttpLookupError("HTTP 404 from api.github.com"))
+    contextThrowing(new HttpLookupError("HTTP 404 from api.github.com", 404, ""))
   );
   expect(observations).toEqual([]);
 });
@@ -82,7 +82,7 @@ it("gravatar connector hashes the email and extracts linked accounts as pivots",
 it("gravatar connector returns empty for an address with no public profile", async () => {
   const observations = await gravatarConnector.run(
     { type: "email", value: "nobody@example.com" },
-    contextThrowing(new HttpLookupError("HTTP 404 from www.gravatar.com"))
+    contextThrowing(new HttpLookupError("HTTP 404 from www.gravatar.com", 404, ""))
   );
   expect(observations).toEqual([]);
 });

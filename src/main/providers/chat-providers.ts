@@ -23,7 +23,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ProviderId, ReasoningEffort } from "../../shared/types/providers.js";
 import type { KeySource } from "../../shared/types/sources.js";
-import { asRecord, fetchJson } from "../search/http.js";
+import { asRecord, fetchJson, HttpLookupError } from "../search/http.js";
 
 export interface ChatCompletionRequest {
   readonly systemPrompt: string;
@@ -86,11 +86,35 @@ export class OllamaChatProvider implements ChatProvider {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error(`Ollama did not respond within ${OLLAMA_TIMEOUT_MS / 1000}s (model: ${request.model})`, { cause: error });
       }
+      // A reachable daemon that answers with an error status (confirmed live:
+      // an unpulled model returns a normal 404 with {"error": "model ... not
+      // found"}) is a different problem than an unreachable one, and needs a
+      // different fix. Collapsing both into "is it running?" sent Jack to
+      // check a daemon that was never the problem.
+      if (error instanceof HttpLookupError) {
+        const reported = ollamaErrorMessage(error.body);
+        throw new Error(
+          reported
+            ? `Ollama rejected the request: ${reported} (model: ${request.model})`
+            : `Ollama returned HTTP ${error.status} for model ${request.model}`,
+          { cause: error }
+        );
+      }
       const message = error instanceof Error ? error.message : String(error);
       throw new Error(`Could not reach Ollama at ${this.baseUrl} -- is it running? (${message})`, { cause: error });
     } finally {
       clearTimeout(timeout);
     }
+  }
+}
+
+/** Ollama's error responses are `{"error": "..."}`; falls back to null for a body that isn't that shape. */
+function ollamaErrorMessage(body: string): string | null {
+  try {
+    const parsed = asRecord(JSON.parse(body)).error;
+    return typeof parsed === "string" && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
   }
 }
 

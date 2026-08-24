@@ -61,7 +61,7 @@ async function fetchVendor(mac: string, signal?: AbortSignal): Promise<string | 
     return null;
   }
   if (!response.ok) {
-    throw new HttpLookupError(`HTTP ${response.status} from api.macvendors.com`);
+    throw new HttpLookupError(`HTTP ${response.status} from api.macvendors.com`, response.status, await response.text().catch(() => ""));
   }
 
   return asString((await response.text()).trim());

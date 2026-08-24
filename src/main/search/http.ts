@@ -4,7 +4,16 @@
  * outside the orchestrator and stop unrelated sources from returning.
  */
 export class HttpLookupError extends Error {
-  public constructor(message: string) {
+  public constructor(
+    message: string,
+    // Carried so a caller that got a real, well-formed error response (a
+    // reachable server saying "no") can tell that apart from one it never
+    // reached at all -- OllamaChatProvider collapsed both into the same
+    // "is it running?" message before this existed, hiding a plain
+    // "model not found" 404 behind a diagnosis that sent Jack nowhere useful.
+    public readonly status: number,
+    public readonly body: string
+  ) {
     super(message);
     this.name = "HttpLookupError";
   }
@@ -27,7 +36,8 @@ export async function fetchJson(url: string, init?: RequestInit): Promise<unknow
   });
 
   if (!response.ok) {
-    throw new HttpLookupError(`HTTP ${response.status} from ${new URL(url).hostname}`);
+    const body = await response.text().catch(() => "");
+    throw new HttpLookupError(`HTTP ${response.status} from ${new URL(url).hostname}`, response.status, body);
   }
 
   return response.json();

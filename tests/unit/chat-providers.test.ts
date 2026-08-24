@@ -62,6 +62,31 @@ describe("OllamaChatProvider", () => {
     );
   });
 
+  it("surfaces Ollama's own reported error instead of a misleading 'is it running?' when the daemon is reachable but rejects the request", async () => {
+    // Confirmed live against a real running daemon: requesting an unpulled
+    // model returns exactly this shape -- a normal HTTP 404 with a JSON body,
+    // from a daemon that is very much running. Before this fix, every
+    // HttpLookupError (any non-2xx, reachable or not) got the same
+    // "is it running?" message, sending the fix to the wrong place.
+    global.fetch = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ error: "model 'llama3.3' not found" }), { status: 404 }))
+    );
+    const provider = new OllamaChatProvider();
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "llama3.3" })).rejects.toThrow(
+      /Ollama rejected the request: model 'llama3\.3' not found/
+    );
+  });
+
+  it("falls back to a plain status message when a non-2xx response body isn't Ollama's usual error shape", async () => {
+    global.fetch = vi.fn(() => Promise.resolve(new Response("Bad Gateway", { status: 502 })));
+    const provider = new OllamaChatProvider();
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "llama3.3" })).rejects.toThrow(
+      /Ollama returned HTTP 502 for model llama3\.3/
+    );
+  });
+
   it("rejects a non-loopback base URL so a remote host cannot be configured accidentally", () => {
     expect(() => new OllamaChatProvider("http://198.51.100.5:11434")).toThrow(/must be loopback/);
   });
