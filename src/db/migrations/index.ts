@@ -28,6 +28,8 @@ import { migration021FreeOsintAi } from "./021-free-osint-ai.js";
 import { migration022ThreeUToolsCatalog } from "./022-3utools-catalog.js";
 import { migration023IosMobileToolCatalog } from "./023-ios-mobile-tool-catalog.js";
 import { migration024RevShellsLabToolCatalog } from "./024-revshells-lab-tool-catalog.js";
+import { migration025ScoutByteAgentDefaults } from "./025-scout-byte-agent-defaults.js";
+import { migration026RunnableAgentModels } from "./026-runnable-agent-models.js";
 
 export interface Migration {
   readonly id: number;
@@ -59,5 +61,7 @@ export const migrations: readonly Migration[] = [
   migration021FreeOsintAi,
   migration022ThreeUToolsCatalog,
   migration023IosMobileToolCatalog,
-  migration024RevShellsLabToolCatalog
+  migration024RevShellsLabToolCatalog,
+  migration025ScoutByteAgentDefaults,
+  migration026RunnableAgentModels
 ];

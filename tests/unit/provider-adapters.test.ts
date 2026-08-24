@@ -60,11 +60,25 @@ it("exposes expanded current model choices for Settings dropdowns", () => {
       "claude-haiku-4-5-20251001",
       "claude-haiku-4-5",
       "claude-opus-4-8",
-      "claude-sonnet-4-6",
-      "claude-sonnet-4.5",
-      "claude-haiku-4.5"
+      "claude-sonnet-4-6"
     ])
   );
+  // Anthropic model ids are hyphenated on the wire. The dotted forms were
+  // unreachable strings that only became dangerous once chat-providers.ts
+  // started making real calls, where selecting one guarantees a 404.
+  expect(anthropic.availableModels).not.toContain("claude-sonnet-4.5");
+  expect(anthropic.availableModels).not.toContain("claude-haiku-4.5");
+});
+
+it("defaults Ollama to a model that fits in consumer memory, with the 70B one still selectable", () => {
+  const ollama = getProviderAdapter("ollama");
+
+  // llama3.3 is a 70B model needing roughly 43GB; defaulting to it meant every
+  // agent pointed at something that could not load on a 32GB machine.
+  expect(ollama.defaultModel).toBe("llama3.1:8b");
+  expect(ollama.availableModels).toEqual(expect.arrayContaining(["llama3.1:8b", "qwen2.5:14b", "llama3.3"]));
+  // Local runtimes expose no effort control, so the agents view hides the picker.
+  expect(ollama.supportedEfforts).toEqual([]);
 });
 
 it("declares each provider's reasoning-effort ladder so the UI only offers rungs the provider actually has", () => {

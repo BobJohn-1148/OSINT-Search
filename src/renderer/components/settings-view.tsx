@@ -9,11 +9,12 @@ import type { AgentRecord } from "../../shared/schemas/agents";
 import type { KeyMetadata } from "../../shared/schemas/keys";
 import type { ProviderInfo } from "../../shared/schemas/providers";
 import { keySourceValues, type KeySource } from "../../shared/types/sources";
+import { DEFAULT_WSL_DISTRO, WSL_DISTRO_SETTING_KEY } from "../../shared/types/tools";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
 const defaultSource: KeySource = "openai";
 const cleanIdleSettingKey = "agents.cleanIdleStatuses";
-const wslDistroSettingKey = "tools.wslDistro";
+const wslDistroSettingKey = WSL_DISTRO_SETTING_KEY;
 const sharedMemoryScopeSettingKey = "agents.sharedMemoryScope";
 
 export function SettingsView() {
@@ -25,7 +26,7 @@ export function SettingsView() {
   const [secret, setSecret] = useState("");
   const [status, setStatus] = useState("Ready");
   const [cleanIdleStatuses, setCleanIdleStatuses] = useState(false);
-  const [wslDistro, setWslDistro] = useState("Ubuntu");
+  const [wslDistro, setWslDistro] = useState(DEFAULT_WSL_DISTRO);
   const [sharedMemoryScope, setSharedMemoryScope] = useState("default");
   const [loadingLabel, setLoadingLabel] = useState("Loading settings");
   // Connection light per source/provider id: "ok" green, "error" amber, else red
@@ -152,7 +153,7 @@ export function SettingsView() {
   async function saveRuntimeSettings(): Promise<void> {
     setLoadingLabel("Saving runtime settings");
     const [wslResult, memoryScopeResult] = await Promise.all([
-      invoke("settings:set", { key: wslDistroSettingKey, value: wslDistro.trim() || "Ubuntu" }),
+      invoke("settings:set", { key: wslDistroSettingKey, value: wslDistro.trim() || DEFAULT_WSL_DISTRO }),
       invoke("settings:set", { key: sharedMemoryScopeSettingKey, value: sharedMemoryScope.trim() || "default" })
     ]);
     const error = [wslResult, memoryScopeResult].find((result) => !result.ok);

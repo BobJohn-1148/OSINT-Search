@@ -3,7 +3,7 @@
  * real investigative surfaces arrive. If stubs cannot route and keep shell
  * state now, later feature tests will hide foundation regressions.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fs from "node:fs";
 import path from "node:path";
@@ -1429,7 +1429,7 @@ it("search attach-image icon picks a file and reverse-searches it in one action"
   });
 });
 
-it("search 'Run Ocean agent' button hands the typed seed to the OSINT agent", async () => {
+it("search 'Re-run Ocean agent' button hands the typed seed to the OSINT agent", async () => {
   const user = userEvent.setup();
 
   render(
@@ -1439,7 +1439,7 @@ it("search 'Run Ocean agent' button hands the typed seed to the OSINT agent", as
   );
 
   await user.type(screen.getByLabelText("Seed"), "example.com");
-  await user.click(screen.getByRole("button", { name: "Run Ocean agent" }));
+  await user.click(screen.getByRole("button", { name: "Re-run Ocean agent" }));
 
   await waitFor(() => {
     expect(invokeMock).toHaveBeenCalledWith(
@@ -1447,6 +1447,144 @@ it("search 'Run Ocean agent' button hands the typed seed to the OSINT agent", as
       expect.objectContaining({ agentId: "osint-agent", seed: { type: "domain", value: "example.com" } })
     );
   });
+});
+
+it("search board fills in the Ocean agent's cited finding as it streams in, so one Enter produces the whole profile", async () => {
+  const user = userEvent.setup();
+  // The agent replies on its own channel after the search resolves, so the test
+  // has to hold the listener the view registered and drive it directly.
+  let agentListener: ((batch: { readonly events: readonly unknown[] }) => void) | null = null;
+  Object.defineProperty(window, "reacher", {
+    configurable: true,
+    value: {
+      ...window.reacher,
+      onAgentEvent: vi.fn((_event: string, listener: (batch: { readonly events: readonly unknown[] }) => void) => {
+        agentListener = listener;
+        return () => {};
+      })
+    }
+  });
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "search:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { run: minimalRun("agent-run", { type: "domain", value: "example.com" }, "Example Registrar Inc") }
+      });
+    }
+    return Promise.resolve({ ok: true as const, value: { cases: [], watches: [], alerts: [], agents: [] } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.type(screen.getByLabelText("Seed"), "example.com");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: /Ocean agent/ })).toBeInTheDocument();
+  });
+
+  act(() => {
+    agentListener?.({
+      events: [
+        {
+          type: "agent:step",
+          step: {
+            runId: "r1",
+            agentId: "osint-agent",
+            sequence: 1,
+            title: "Read the registrar record",
+            status: "complete",
+            summary: "RDAP named the registrar.",
+            next: null,
+            sources: ["observation:agent-run:obs"]
+          }
+        },
+        {
+          type: "agent:finding",
+          finding: {
+            id: "f1",
+            runId: "r1",
+            agentId: "osint-agent",
+            caseId: "c1",
+            title: "Registrar identified",
+            summary: "example.com is registered through Example Registrar Inc.",
+            sources: ["observation:agent-run:obs"],
+            confidence: 2,
+            savedItemId: null
+          }
+        }
+      ]
+    });
+  });
+
+  expect(await screen.findByText("Registrar identified")).toBeInTheDocument();
+  expect(screen.getByText("Read the registrar record")).toBeInTheDocument();
+  // The citation is rendered, because a finding the investigator cannot trace
+  // back to an observation is exactly what the citation gate exists to prevent.
+  expect(screen.getByText("observation:agent-run:obs")).toBeInTheDocument();
+});
+
+it("search board ignores agent events from other agents so an unrelated run cannot overwrite the panel", async () => {
+  const user = userEvent.setup();
+  let agentListener: ((batch: { readonly events: readonly unknown[] }) => void) | null = null;
+  Object.defineProperty(window, "reacher", {
+    configurable: true,
+    value: {
+      ...window.reacher,
+      onAgentEvent: vi.fn((_event: string, listener: (batch: { readonly events: readonly unknown[] }) => void) => {
+        agentListener = listener;
+        return () => {};
+      })
+    }
+  });
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "search:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { run: minimalRun("other-run", { type: "domain", value: "example.com" }, "Example Registrar Inc") }
+      });
+    }
+    return Promise.resolve({ ok: true as const, value: { cases: [], watches: [], alerts: [], agents: [] } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.type(screen.getByLabelText("Seed"), "example.com");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: /Ocean agent/ })).toBeInTheDocument();
+  });
+
+  act(() => {
+    agentListener?.({
+      events: [
+        {
+          type: "agent:finding",
+          finding: {
+            id: "f2",
+            runId: "r2",
+            agentId: "malware-analyst-agent",
+            caseId: "c1",
+            title: "Unrelated malware finding",
+            summary: "Belongs to another surface entirely.",
+            sources: ["seed:domain:example.com"],
+            confidence: 1,
+            savedItemId: null
+          }
+        }
+      ]
+    });
+  });
+
+  expect(screen.queryByText("Unrelated malware finding")).not.toBeInTheDocument();
 });
 
 it("renders six connected methodology phases and stays read-only so the map cannot launch tools", async () => {

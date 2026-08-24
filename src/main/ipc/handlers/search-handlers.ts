@@ -2,6 +2,13 @@
  * Search handlers bridge Electron IPC to the orchestrator while keeping source
  * events renderer-visible and persistence repository-owned. If the renderer ran
  * connectors directly, passive lookups could bypass audit and database contracts.
+ *
+ * A completed search also triggers the OSINT agent, so one Enter in the search
+ * box produces the whole profile — sources, scripts, and reasoning — instead of
+ * three separate clicks. Main owns that trigger rather than the renderer firing
+ * two calls in parallel, because the agent has to reason over the observations
+ * this run just produced: an agent started alongside the search would have no
+ * evidence in its context and would fail its own citation gate every time.
  */
 import type { WebContents } from "electron";
 import type { AuditRepository } from "../../../db/repositories/audit-repository.js";
@@ -17,15 +24,37 @@ import type {
   SearchRunRequest,
   SearchRunResponse
 } from "../../../shared/schemas/search.js";
-import type { SourceConnector } from "../../search/source-connector.js";
+import type { CaseRecord } from "../../../shared/schemas/cases.js";
+import type { SearchRunResult } from "../../../shared/types/search.js";
+import type { AgentRunInput } from "../../agents/agent-runtime-service.js";
 import { runSearch } from "../../search/orchestrator.js";
+import type { SourceConnector } from "../../search/source-connector.js";
+
+const AUTO_AGENT_ID = "osint-agent";
+
+/**
+ * The agent and case dependencies are declared structurally rather than as the
+ * concrete service and repository so this handler can be exercised without
+ * standing up a model call. The alternative -- importing AgentRuntimeService
+ * directly -- would make every search test depend on a live Ollama.
+ */
+export interface SearchAgentRunner {
+  run(input: AgentRunInput): Promise<unknown>;
+}
+
+export interface SearchCaseDirectory {
+  list(): readonly CaseRecord[];
+  create(title: string, tags: readonly string[]): CaseRecord;
+}
 
 export function createSearchHandlers(
   searchRepository: SearchRepository,
   auditRepository: AuditRepository,
   connectors: readonly SourceConnector[],
   webContentsProvider: () => readonly WebContents[],
-  vaultRepository: VaultRepository
+  vaultRepository: VaultRepository,
+  agentRuntimeService: SearchAgentRunner,
+  casesRepository: SearchCaseDirectory
 ) {
   const activeRuns = new Map<string, AbortController>();
 
@@ -48,6 +77,34 @@ export function createSearchHandlers(
       keyRequired: connector.keyRequired
     }))
   );
+
+  /**
+   * Every search would otherwise mint its own case, because the runtime creates
+   * one whenever none is passed. Reusing the newest open case mirrors what the
+   * search view already did by hand before the agent ran automatically.
+   */
+  function activeCaseId(seedValue: string): string {
+    const openCase = casesRepository.list().find((record) => record.status === "open");
+    return (openCase ?? casesRepository.create(`Investigation — ${seedValue}`, ["search"])).id;
+  }
+
+  /**
+   * Deliberately not awaited by the caller: a local model takes far longer than
+   * the search itself, and blocking the IPC reply on it would leave the board
+   * empty until the agent finished. The agent reports its own progress over the
+   * agent:events channel, and a failure here (no Ollama, no grounded citation)
+   * must not turn a good search into a failed one.
+   */
+  function startAgent(run: SearchRunResult): void {
+    void agentRuntimeService
+      .run({
+        agentId: AUTO_AGENT_ID,
+        seed: run.seed,
+        caseId: activeCaseId(run.seed.value),
+        observations: run.observations
+      })
+      .catch(() => undefined);
+  }
 
   async function execute(request: SearchRunRequest | SearchPivotRequest, action: string): Promise<SearchRunResponse> {
     const controller = new AbortController();
@@ -79,6 +136,11 @@ export function createSearchHandlers(
       sensitivity: "medium",
       detail: { seedType: request.seed.type, sourceCount: run.statuses.length }
     });
+    // A cancelled search must not hand its partial results to the agent — the
+    // investigator stopped it for a reason.
+    if (!controller.signal.aborted) {
+      startAgent(run);
+    }
     return { run };
   }
 

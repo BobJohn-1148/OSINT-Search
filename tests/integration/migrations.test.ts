@@ -45,7 +45,9 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 21, name: "free-osint-ai" },
     { id: 22, name: "3utools-catalog" },
     { id: 23, name: "ios-mobile-tool-catalog" },
-    { id: 24, name: "revshells-lab-tool-catalog" }
+    { id: 24, name: "revshells-lab-tool-catalog" },
+    { id: 25, name: "scout-byte-agent-defaults" },
+    { id: 26, name: "runnable-agent-models" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -104,13 +106,43 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     reasoning_effort: null
   });
   // Migration 021 repoints the investigation agents onto the free local runtime,
-  // leaving the architect on its coding model.
+  // leaving the architect on its coding model; migration 026 then lands them on a
+  // model that fits in consumer RAM instead of a 70B one that never could.
   expect(db.prepare("SELECT provider, model FROM agents WHERE id = 'osint-agent'").get()).toEqual({
     provider: "ollama",
-    model: "llama3.3"
+    model: "llama3.1:8b"
   });
   expect(db.prepare("SELECT provider FROM agents WHERE id = 'malware-analyst-agent'").get()).toEqual({ provider: "ollama" });
   expect(db.prepare("SELECT provider FROM agents WHERE id = 'architect-agent'").get()).toEqual({ provider: "openai" });
+});
+
+it("migration 026 leaves a deliberately chosen model alone so a bigger machine keeps its 70B pick", () => {
+  const db = openMemoryDatabase();
+  for (const migration of migrations.filter((entry) => entry.id < 26)) {
+    migration.up(db);
+  }
+  // Stand in for Jack picking a heavier model in Settings on capable hardware.
+  db.prepare("UPDATE agents SET model = 'qwen2.5:14b' WHERE id = 'scout-agent'").run();
+
+  migrations.find((entry) => entry.id === 26)?.up(db);
+
+  expect(db.prepare("SELECT model FROM agents WHERE id = 'scout-agent'").get()).toEqual({ model: "qwen2.5:14b" });
+  expect(db.prepare("SELECT model FROM agents WHERE id = 'osint-agent'").get()).toEqual({ model: "llama3.1:8b" });
+});
+
+it("migration 026 corrects an unreachable Anthropic model id, because a real call would 404 on it", () => {
+  const db = openMemoryDatabase();
+  for (const migration of migrations.filter((entry) => entry.id < 26)) {
+    migration.up(db);
+  }
+  db.prepare("UPDATE agents SET provider = 'anthropic', model = 'claude-sonnet-4.5' WHERE id = 'ripper-agent'").run();
+
+  migrations.find((entry) => entry.id === 26)?.up(db);
+
+  expect(db.prepare("SELECT provider, model FROM agents WHERE id = 'ripper-agent'").get()).toEqual({
+    provider: "anthropic",
+    model: "claude-sonnet-5"
+  });
 });
 
 it("phase 13 migration preserves existing tool runs so upgraded databases keep catalog evidence", () => {

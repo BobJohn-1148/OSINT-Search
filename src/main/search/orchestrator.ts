@@ -48,7 +48,13 @@ export async function runSearch(input: {
         // both declares one and is running this seed), so an unused connector's
         // secret is never read or audited.
         const apiKey = connector.keySource ? input.resolveApiKey?.(connector) ?? null : null;
-        const results = await runConnectorWithTimeout(connector, input.seed, input.signal, input.connectorTimeoutMs ?? 60_000, apiKey);
+        const results = await runConnectorWithTimeout(
+          connector,
+          input.seed,
+          input.signal,
+          connector.timeoutMs ?? input.connectorTimeoutMs ?? 60_000,
+          apiKey
+        );
         const sourceObservations = results.map((result, index) => ({
           id: `${runId}:${connector.id}:${index}`,
           runId,

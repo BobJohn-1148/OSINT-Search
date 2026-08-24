@@ -17,6 +17,11 @@ export interface SourceConnector {
   // orchestrator resolve and audit exactly one secret per connector instead of
   // handing every connector the whole vault.
   readonly keySource?: KeySource;
+  // Per-connector abort deadline. Declared here rather than raised globally
+  // because a process-backed source legitimately runs for minutes while an HTTP
+  // lookup that takes that long is simply hung -- one shared timeout cannot be
+  // right for both.
+  readonly timeoutMs?: number;
   supports(seedType: SeedType): boolean;
   run(seed: SearchSeed, context: SourceRunContext): Promise<readonly ObservationInput[]>;
 }

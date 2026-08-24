@@ -1,26 +1,93 @@
 /**
- * The agent runtime is deterministic in Phase 5 because provider adapters are
- * already configurable but real long-running model/tool loops arrive later. This
- * still exercises the correct main-process queue, cited finding gate, case save,
- * memory write, history, and batched event path without letting 3D code run work.
+ * The agent runtime makes a real model call because the deterministic-template
+ * version it replaced produced identical boilerplate for every agent regardless
+ * of persona, seed, or case -- the prompt file was read only to count its
+ * characters, never sent anywhere. Every claim a model returns is filtered
+ * against a citation set built from the exact context it was given (the seed,
+ * the observations of the search that triggered this run, recent shared memory,
+ * and the case's existing evidence); anything the model cites that was not
+ * actually in that context is dropped before it can reach agent_memory, so
+ * "never states a thing he cannot cite" (the OSINT agent's own rule) is enforced
+ * here, not just requested in the prompt. A provider that is not wired to a real
+ * call (see providers/chat-providers.ts) fails the run loudly instead of falling
+ * back to fake text, so a misconfigured agent cannot look like it is working
+ * when it is not.
+ *
+ * Reasoning effort (migration 020) is forwarded to the provider, which is what
+ * finally makes that stored preference mean something: Anthropic maps it onto its
+ * own effort ladder, and Ollama ignores it because a local runtime has no such
+ * control -- exactly what the agents view already tells Jack.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repository.js";
 import type { AgentsRepository } from "../../db/repositories/agents-repository.js";
 import type { AuditRepository } from "../../db/repositories/audit-repository.js";
 import type { CasesRepository } from "../../db/repositories/cases-repository.js";
+import type { AgentRecord } from "../../shared/schemas/agents.js";
 import type {
   AgentFinding,
   AgentLiveState,
+  AgentMemoryRecord,
   AgentRuntimeEvent,
-  AgentRunRecord,
-  AgentStep
+  AgentRunRecord
 } from "../../shared/schemas/agents-runtime.js";
 import { agentFindingSchema, STEP_FORMAT } from "../../shared/schemas/agents-runtime.js";
+import type { CaseItem } from "../../shared/schemas/cases.js";
 import type { AgentSeed } from "../../shared/types/agents-runtime.js";
+import type { Observation } from "../../shared/types/search.js";
+import { ChatProviderResolver } from "../providers/chat-providers.js";
 import { AgentEventBatcher } from "./agent-event-batcher.js";
+
+const MEMORY_CONTEXT_LIMIT = 20;
+const CASE_CONTEXT_LIMIT = 20;
+// Search fan-out can return hundreds of observations. The citation list has to
+// stay short enough that a small local model still reaches the instructions
+// after it, so the prompt is capped rather than truncated mid-entry.
+const OBSERVATION_CONTEXT_LIMIT = 40;
+
+const modelStepSchema = z.object({
+  title: z.string().min(1),
+  status: z.enum(["queued", "running", "complete", "error"]),
+  summary: z.union([z.string().min(1), z.null()]).optional().transform((value) => value ?? null),
+  next: z.union([z.string().min(1), z.null()]).optional().transform((value) => value ?? null),
+  sources: z.array(z.string().min(1)).default([])
+});
+
+const modelFindingSchema = z.object({
+  title: z.string().min(1),
+  summary: z.string().min(1),
+  sources: z.array(z.string().min(1)).default([]),
+  confidence: z.number().int().min(1)
+});
+
+// The model is asked for content only. Ids, run ids, and agent ids are assigned
+// after parsing so a model can never claim to be a different agent or overwrite
+// another run's rows.
+const modelOutputSchema = z.object({
+  steps: z.array(modelStepSchema).min(1),
+  finding: modelFindingSchema
+});
+
+type ModelOutput = z.infer<typeof modelOutputSchema>;
+
+export interface AgentRunInput {
+  readonly agentId: string;
+  readonly seed: AgentSeed;
+  readonly caseId?: string;
+  // Observations from the search run that triggered this agent, when there was
+  // one. Passed in rather than re-queried so the agent reasons over exactly the
+  // evidence the investigator just saw, and can cite it.
+  readonly observations?: readonly Observation[];
+}
+
+interface AgentContext {
+  readonly memoryRows: readonly AgentMemoryRecord[];
+  readonly caseItems: readonly CaseItem[];
+  readonly citations: ReadonlyMap<string, string>;
+}
 
 export class AgentRuntimeService {
   private queue: Promise<unknown> = Promise.resolve();
@@ -32,10 +99,11 @@ export class AgentRuntimeService {
     private readonly auditRepository: AuditRepository,
     private readonly emitBatch: (events: readonly AgentRuntimeEvent[]) => void,
     private readonly repoRoot: string,
-    private readonly now = () => new Date()
+    private readonly now = () => new Date(),
+    private readonly chatProviders = new ChatProviderResolver()
   ) {}
 
-  public async run(input: { readonly agentId: string; readonly seed: AgentSeed; readonly caseId?: string }): Promise<{
+  public async run(input: AgentRunInput): Promise<{
     readonly run: AgentRunRecord;
     readonly finding: AgentFinding;
   }> {
@@ -49,7 +117,7 @@ export class AgentRuntimeService {
     return this.runtimeRepository.currentStates(this.agentsRepository.list().map((agent) => agent.id), nowTs);
   }
 
-  private execute(input: { readonly agentId: string; readonly seed: AgentSeed; readonly caseId?: string }) {
+  private async execute(input: AgentRunInput) {
     const agent = this.agentsRepository.get(input.agentId);
     const prompt = this.readPrompt(agent.promptPath);
     const batcher = new AgentEventBatcher(this.emitBatch);
@@ -67,20 +135,51 @@ export class AgentRuntimeService {
       const state: AgentLiveState = {
         agentId: agent.id,
         status: "working",
-        task: `running Sherlock on ${input.seed.value}`,
+        // The old label claimed "running Sherlock on <seed>" while doing nothing
+        // of the sort. Sherlock is a search connector now, so the agent reports
+        // the work it actually does: reasoning over cited evidence.
+        task: `investigating ${input.seed.type} ${input.seed.value} with ${agent.model}`,
         lastRunId: run.id,
         updatedTs: startedTs
       };
       batcher.push({ type: "agent:state", state });
 
-      const memoryCount = this.runtimeRepository.listMemory(undefined, 50).length;
-      for (const step of this.buildSteps(run.id, agent.id, input.seed, prompt, memoryCount)) {
-        const parsed = STEP_FORMAT.parse(step);
+      const context = this.buildContext(caseId, input.seed, input.observations ?? []);
+      const modelOutput = await this.runModel(agent, prompt, input.seed, context);
+
+      let sequence = 1;
+      for (const modelStep of modelOutput.steps) {
+        const parsed = STEP_FORMAT.parse({
+          runId: run.id,
+          agentId: agent.id,
+          sequence: sequence++,
+          title: modelStep.title,
+          status: modelStep.status,
+          summary: modelStep.summary,
+          next: modelStep.next,
+          sources: modelStep.sources.filter((source) => context.citations.has(source))
+        });
         this.runtimeRepository.appendStep(parsed, this.now().toISOString());
         batcher.push({ type: "agent:step", step: parsed });
       }
 
-      const finding = this.createCitedFinding(run.id, agent.id, input.seed, caseId);
+      const groundedSources = modelOutput.finding.sources.filter((source) => context.citations.has(source));
+      if (groundedSources.length === 0) {
+        throw new Error(
+          `${agent.name} did not cite anything present in the context it was given (offered: ${modelOutput.finding.sources.join(", ") || "nothing"})`
+        );
+      }
+      const finding = agentFindingSchema.parse({
+        id: randomUUID(),
+        runId: run.id,
+        agentId: agent.id,
+        caseId,
+        title: modelOutput.finding.title,
+        summary: modelOutput.finding.summary,
+        sources: groundedSources,
+        confidence: modelOutput.finding.confidence,
+        savedItemId: null
+      });
       const result = this.runtimeRepository.atomic(() => {
         const savedItem = this.casesRepository.addItem({
           caseId,
@@ -140,56 +239,82 @@ export class AgentRuntimeService {
     }
   }
 
-  private buildSteps(runId: string, agentId: string, seed: AgentSeed, prompt: string, memoryCount: number): AgentStep[] {
-    return [
-      {
-        runId,
-        agentId,
-        sequence: 1,
-        title: "Load prompt and memory",
-        status: "complete",
-        summary: `Loaded ${prompt.length} prompt characters and ${memoryCount} memory rows.`,
-        next: "Normalize seed",
-        sources: ["planning/agent-prompts/osint-agent.md"]
-      },
-      {
-        runId,
-        agentId,
-        sequence: 2,
-        title: "Normalize seed",
-        status: "complete",
-        summary: `${seed.type}:${seed.value}`,
-        next: "Cite passive source",
-        sources: [`seed:${seed.type}`]
-      },
-      {
-        runId,
-        agentId,
-        sequence: 3,
-        title: "Create cited finding",
-        status: "complete",
-        summary: `Prepared a cited finding for ${seed.value}.`,
-        next: null,
-        sources: [`passive:${seed.type}:${seed.value}`]
-      }
-    ];
+  /**
+   * The citation map is the whole integrity mechanism: it is built from exactly
+   * what the model is about to be shown and nothing else, so a returned source
+   * string can be checked by lookup instead of by trusting the model. Keys are
+   * namespaced by kind so a memory row and a case item carrying the same text
+   * cannot collapse into one citation.
+   */
+  private buildContext(caseId: string, seed: AgentSeed, observations: readonly Observation[]): AgentContext {
+    const memoryRows = this.runtimeRepository.listMemory(undefined, MEMORY_CONTEXT_LIMIT);
+    const caseItems = this.casesRepository.timeline(caseId).slice(-CASE_CONTEXT_LIMIT);
+    const citations = new Map<string, string>();
+    citations.set(`seed:${seed.type}:${seed.value}`, `The seed being investigated: ${seed.type} ${seed.value}`);
+    for (const observation of observations.slice(0, OBSERVATION_CONTEXT_LIMIT)) {
+      citations.set(`observation:${observation.id}`, `${observation.source} reported ${observation.type}: ${observation.value}`);
+    }
+    for (const row of memoryRows) {
+      citations.set(`memory:${row.key}`, row.value);
+    }
+    for (const item of caseItems) {
+      citations.set(`case-item:${item.id}`, `${item.title}: ${item.text}`);
+    }
+    return { memoryRows, caseItems, citations };
   }
 
-  private createCitedFinding(runId: string, agentId: string, seed: AgentSeed, caseId: string | null): AgentFinding {
-    return agentFindingSchema.parse({
-      id: randomUUID(),
-      runId,
-      agentId,
-      caseId,
-      title: `OSINT lead for ${seed.value}`,
-      summary: `${seed.value} is ready for passive correlation from ${seed.type} sources.`,
-      sources: [`passive:${seed.type}:${seed.value}`],
-      confidence: 1,
-      savedItemId: null
-    });
+  private async runModel(agent: AgentRecord, prompt: string, seed: AgentSeed, context: AgentContext): Promise<ModelOutput> {
+    const provider = this.chatProviders.resolve(agent.provider);
+    const userPrompt = buildUserPrompt(seed, context.citations);
+
+    const first = await provider.complete({ systemPrompt: prompt, userPrompt, model: agent.model, effort: agent.reasoningEffort });
+    const parsed = parseModelOutput(first.text);
+    if (parsed.ok) {
+      return parsed.value;
+    }
+
+    // One retry with the parse error fed back, because a local model dropping a
+    // brace is common and cheap to correct. A second failure fails the run:
+    // falling back to a template is the exact bug this service was rewritten to
+    // remove, so there is no third path.
+    const retryPrompt = `${userPrompt}\n\nYour previous response could not be parsed as the required JSON: ${parsed.error}\nRespond again with ONLY the JSON object -- no prose, no markdown code fences.`;
+    const retry = await provider.complete({ systemPrompt: prompt, userPrompt: retryPrompt, model: agent.model, effort: agent.reasoningEffort });
+    const retryParsed = parseModelOutput(retry.text);
+    if (retryParsed.ok) {
+      return retryParsed.value;
+    }
+    throw new Error(`${agent.name}'s model response was not valid JSON after one retry: ${retryParsed.error}`);
   }
 
   private readPrompt(promptPath: string): string {
     return fs.readFileSync(path.join(this.repoRoot, promptPath), "utf8");
+  }
+}
+
+function buildUserPrompt(seed: AgentSeed, citations: ReadonlyMap<string, string>): string {
+  const citationLines = [...citations.entries()].map(([key, description]) => `- ${key}: ${description}`).join("\n");
+  return [
+    `Seed: ${seed.type} = ${seed.value}`,
+    "",
+    'You may only cite the following sources. Use their exact key (the part before the colon) in every "sources" array -- never invent a source string:',
+    citationLines || "(no prior context -- this is the first thing known about this seed)",
+    "",
+    "Respond with ONLY a JSON object, no prose and no markdown code fences, matching exactly this shape:",
+    '{"steps": [{"title": string, "status": "complete", "summary": string | null, "next": string | null, "sources": string[]}], "finding": {"title": string, "summary": string, "sources": string[], "confidence": integer >= 1}}'
+  ].join("\n");
+}
+
+function parseModelOutput(text: string): { readonly ok: true; readonly value: ModelOutput } | { readonly ok: false; readonly error: string } {
+  // Local models routinely wrap JSON in a markdown fence despite being told not
+  // to; stripping it here is cheaper than spending the one retry on formatting.
+  const stripped = text
+    .trim()
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/, "")
+    .trim();
+  try {
+    return { ok: true, value: modelOutputSchema.parse(JSON.parse(stripped)) };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "unknown parse error" };
   }
 }

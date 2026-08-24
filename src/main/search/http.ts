@@ -12,7 +12,13 @@ export class HttpLookupError extends Error {
 
 export async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
   const headers = new Headers(init?.headers);
-  headers.set("accept", "application/json");
+  // Default the accept header rather than forcing it: Cloudflare's DoH JSON API
+  // answers 400 to "application/json" and needs "application/dns-json", and
+  // overwriting the caller here silently cost every domain search its DNS
+  // evidence. Connectors that say nothing still get JSON.
+  if (!headers.has("accept")) {
+    headers.set("accept", "application/json");
+  }
   headers.set("user-agent", "Reacher local OSINT app");
 
   const response = await fetch(url, {

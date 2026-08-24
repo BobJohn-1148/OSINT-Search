@@ -3,6 +3,13 @@
  * of ranked links. If source arrivals were hidden until completion, the user
  * could not see which passive sources corroborated or failed during fan-out.
  *
+ * Pressing Enter now starts the whole profile, not just the HTTP sources: the
+ * process-backed scripts run as connectors and main starts the OSINT agent once
+ * the run lands. Those take far longer than a lookup, so the surface renders what
+ * has arrived instead of waiting — a live intake panel during the run, then the
+ * board, then the agent panel filling in behind it. Blocking on the slowest
+ * source would put a two-minute blank screen behind one keystroke.
+ *
  * The surface has two faces: an empty "ready when you are" composer with a right
  * rail (cases, monitoring, agent plugins), and — once a run returns — an
  * intelligence board that reads the same run every other panel does: a fact
@@ -22,6 +29,7 @@ import {
   Play,
   Save,
   Search as SearchIcon,
+  Sparkles,
   ShieldCheck,
   Square,
   UserRound
@@ -30,6 +38,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { AgentRecord } from "../../shared/schemas/agents";
+import type { AgentFinding, AgentStep } from "../../shared/schemas/agents-runtime";
 import type { CaseRecord } from "../../shared/schemas/cases";
 import type { WatchRecord } from "../../shared/schemas/monitoring";
 import type { Observation, SearchRunResult, SearchSeed, SearchTreeNode, SeedType, SourceStatus } from "../../shared/types/search";
@@ -42,6 +51,9 @@ interface SearchLocationState {
 }
 
 type SearchDepth = "low" | "standard" | "deep";
+
+/** The agent main auto-runs after every search; see search-handlers.ts. */
+const OCEAN_AGENT_ID = "osint-agent";
 
 export function SearchView() {
   const { invoke } = useReacherClient();
@@ -59,6 +71,12 @@ export function SearchView() {
   const [status, setStatus] = useState(() => (pivotSeed?.value ? "Seed pivoted in — review, then search" : "Ready when you are."));
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [loadingLabel, setLoadingLabel] = useState("");
+  // Agent output arrives on its own channel after the search reply, because main
+  // starts the agent without blocking that reply. Held separately from `run` so
+  // the board can render before the agent has said anything.
+  const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
+  const [agentFinding, setAgentFinding] = useState<AgentFinding | null>(null);
+  const [agentTask, setAgentTask] = useState<string | null>(null);
   // Right-rail context. Loaded defensively: these channels may be absent in some
   // harnesses, so a malformed response can never crash the composer.
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -72,9 +90,25 @@ export function SearchView() {
     const removeObservationListener = window.reacher.onSearchEvent("search:observations", (observations) => {
       setLiveObservations((current) => [...current, ...observations].slice(-500));
     });
+    // Every agent shares one event channel, so filter to the agent this surface
+    // auto-runs; a run started from the agents view must not redraw this panel.
+    const removeAgentListener = window.reacher.onAgentEvent("agent:events", (batch) => {
+      for (const event of batch.events) {
+        if (event.type === "agent:step" && event.step.agentId === OCEAN_AGENT_ID) {
+          setAgentSteps((current) => [...current, event.step].slice(-40));
+        }
+        if (event.type === "agent:finding" && event.finding.agentId === OCEAN_AGENT_ID) {
+          setAgentFinding(event.finding);
+        }
+        if (event.type === "agent:state" && event.state.agentId === OCEAN_AGENT_ID) {
+          setAgentTask(event.state.status === "working" ? event.state.task : null);
+        }
+      }
+    });
     return () => {
       removeSourceListener();
       removeObservationListener();
+      removeAgentListener();
     };
   }, []);
 
@@ -123,6 +157,9 @@ export function SearchView() {
     setSelectedNode(null);
     setArrivals([]);
     setLiveObservations([]);
+    setAgentSteps([]);
+    setAgentFinding(null);
+    setAgentTask("queued behind the source fan-out");
     setStatus("Launching passive sources");
     setLoadingLabel("Running correlation search");
     const runId = crypto.randomUUID();
@@ -135,7 +172,7 @@ export function SearchView() {
       return;
     }
     setRun(result.value.run);
-    setStatus("Search complete");
+    setStatus("Sources complete — Ocean agent is still reasoning");
     setLoadingLabel("");
   }
 
@@ -147,6 +184,9 @@ export function SearchView() {
     setStatus(result.ok && result.value.cancelled ? "Search cancelled" : "No active search to cancel");
     setActiveRunId(null);
     setLoadingLabel("");
+    // A cancelled search never reaches the agent (main checks the abort signal),
+    // so the panel must not keep claiming one is queued.
+    setAgentTask(null);
   }
 
   async function attachAndSearchImage(): Promise<void> {
@@ -172,15 +212,48 @@ export function SearchView() {
     setLoadingLabel("");
   }
 
+  /**
+   * A search already starts this agent, so the button is a re-run — useful when
+   * the first pass failed (no Ollama, nothing citable) and the investigator has
+   * fixed the cause without wanting to pay for the whole fan-out again.
+   */
   async function runOceanAgent(): Promise<void> {
     if (!activeSeed.value) {
       setStatus("Enter something to investigate first");
       return;
     }
-    setLoadingLabel("Running Ocean agent");
+    setLoadingLabel("Re-running Ocean agent");
+    setAgentSteps([]);
+    setAgentFinding(null);
+    setAgentTask("starting");
     const targetCase = await ensureCase();
-    const result = await invoke("agent:run", { agentId: "osint-agent", seed: activeSeed, caseId: targetCase?.id });
-    setStatus(result.ok ? "Ocean agent is investigating — check the AI agents tab" : result.error.message);
+    const result = await invoke("agent:run", { agentId: OCEAN_AGENT_ID, seed: activeSeed, caseId: targetCase?.id });
+    if (!result.ok) {
+      setAgentTask(null);
+    }
+    setStatus(result.ok ? "Ocean agent finished — see the agent panel" : result.error.message);
+    setLoadingLabel("");
+  }
+
+  async function saveAgentFinding(): Promise<void> {
+    if (!agentFinding) {
+      return;
+    }
+    setLoadingLabel("Saving agent finding");
+    const targetCase = await ensureCase();
+    if (!targetCase) {
+      setLoadingLabel("");
+      return;
+    }
+    const result = await invoke("case:addItem", {
+      caseId: targetCase.id,
+      itemType: "observation",
+      refId: agentFinding.id,
+      title: agentFinding.title,
+      text: agentFinding.summary,
+      metadata: { entity: activeSeed.value || agentFinding.title, strength: agentFinding.confidence, band: "single-source" }
+    });
+    setStatus(result.ok ? `Agent finding saved to ${targetCase.title}` : result.error.message);
     setLoadingLabel("");
   }
 
@@ -335,7 +408,7 @@ export function SearchView() {
             <div className="search-actions">
               <button className="action-button primary-action" type="button" onClick={() => void runOceanAgent()}>
                 <Bot size={16} aria-hidden="true" />
-                Run Ocean agent
+                Re-run Ocean agent
               </button>
               <span className="route-summary">{status}</span>
             </div>
@@ -472,6 +545,50 @@ export function SearchView() {
                     </div>
                   </section>
 
+                  <section className="console-panel agent-panel" aria-labelledby="agent-panel-title">
+                    <div className="section-title-row section-title-row-wide">
+                      <h2 className="section-title" id="agent-panel-title">
+                        <Sparkles size={15} aria-hidden="true" /> Ocean agent
+                      </h2>
+                      <span className="status-text">{agentTask ? "working" : agentFinding ? "done" : "idle"}</span>
+                    </div>
+                    {agentTask ? <p className="status-text">{agentTask}</p> : null}
+                    <div className="agent-step-list">
+                      {agentSteps.map((step) => (
+                        <div className="agent-step-row" key={`${step.runId}-${step.sequence}`}>
+                          <span className="agent-step-index">{step.sequence}</span>
+                          <div className="agent-step-body">
+                            <strong>{step.title}</strong>
+                            {step.summary ? <span className="status-text">{step.summary}</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {agentFinding ? (
+                      <div className="agent-finding">
+                        <strong>{agentFinding.title}</strong>
+                        <p className="console-line">{agentFinding.summary}</p>
+                        <div className="agent-citations">
+                          {agentFinding.sources.map((source) => (
+                            <span className="strength-pill" key={source}>{source}</span>
+                          ))}
+                        </div>
+                        <div className="action-row">
+                          <button className="action-button" type="button" onClick={() => void saveAgentFinding()}>
+                            <Save size={15} aria-hidden="true" />
+                            Save finding
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="status-text">
+                        {agentTask
+                          ? "Reasoning over the cited observations from this run."
+                          : "No finding yet. Re-run the agent if the first pass could not reach the model."}
+                      </p>
+                    )}
+                  </section>
+
                   <section className="console-panel" aria-labelledby="sources-title">
                     <h2 className="section-title" id="sources-title">Source plugins</h2>
                     <div className="source-plugin-list">
@@ -521,10 +638,51 @@ export function SearchView() {
           ) : (
             <div className="search-live-hint" aria-live="polite">
               {activeRunId ? (
-                <div className="launch-meter is-active">
-                  <SearchIcon size={18} aria-hidden="true" />
-                  <span>{status} · {arrivals.length} sources · {liveObservations.length} observations</span>
-                </div>
+                <section className="console-panel search-intake" aria-labelledby="intake-title">
+                  <div className="section-title-row section-title-row-wide">
+                    <h2 className="section-title" id="intake-title">
+                      <SearchIcon size={15} aria-hidden="true" /> Collecting
+                    </h2>
+                    <span className="status-text">
+                      {arrivals.length} sources · {liveObservations.length} observations
+                    </span>
+                  </div>
+                  <div className="launch-meter is-active">
+                    <span>{status}</span>
+                  </div>
+                  <div className="intake-columns">
+                    <div className="intake-column">
+                      <h3 className="intake-heading">Sources</h3>
+                      <div className="rail-list">
+                        {arrivals.slice(-12).map((arrival) => (
+                          <div className="intake-row" key={`${arrival.sourceId}-${arrival.status}`}>
+                            <span
+                              className={arrival.status === "returned" ? "status-dot status-dot-verified" : "status-dot status-dot-error"}
+                              aria-hidden="true"
+                            />
+                            <span className="intake-row-name">{arrival.label}</span>
+                            <span className="status-text">
+                              {arrival.status === "returned" ? `${arrival.observationCount}` : "failed"}
+                            </span>
+                          </div>
+                        ))}
+                        {arrivals.length === 0 ? <p className="status-text">Waiting for the first source…</p> : null}
+                      </div>
+                    </div>
+                    <div className="intake-column">
+                      <h3 className="intake-heading">Latest facts</h3>
+                      <div className="rail-list">
+                        {liveObservations.slice(-12).reverse().map((observation) => (
+                          <div className="intake-row" key={observation.id}>
+                            <span className="intake-row-name">{observation.type}</span>
+                            <span className="status-text">{observation.value}</span>
+                          </div>
+                        ))}
+                        {liveObservations.length === 0 ? <p className="status-text">No facts yet.</p> : null}
+                      </div>
+                    </div>
+                  </div>
+                </section>
               ) : (
                 <p className="status-text">Type a seed and search — sources fan out in parallel and merge into one profile.</p>
               )}

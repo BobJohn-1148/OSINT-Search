@@ -86,6 +86,10 @@ const openAiModels = [
   "gpt-5.1-mini"
 ] as const;
 
+// Dotted ids ("claude-sonnet-4.5") are not real Anthropic model strings -- the
+// wire format uses hyphens throughout. They were harmless while nothing called
+// Anthropic; now that chat-providers.ts does, offering one in the picker would
+// hand Jack a guaranteed 404, so they are gone.
 const anthropicModels = [
   "claude-fable-5",
   "claude-opus-5",
@@ -93,9 +97,7 @@ const anthropicModels = [
   "claude-haiku-4-5-20251001",
   "claude-haiku-4-5",
   "claude-opus-4-8",
-  "claude-sonnet-4-6",
-  "claude-sonnet-4.5",
-  "claude-haiku-4.5"
+  "claude-sonnet-4-6"
 ] as const;
 
 export const providerAdapters: readonly ProviderAdapter[] = [
@@ -105,7 +107,11 @@ export const providerAdapters: readonly ProviderAdapter[] = [
   externalProvider("xai", "xAI Grok", "xai", "grok-4.1", ["grok-4.1", "grok-4.1-fast"], "xai-", ["low", "high"]),
   // Anthropic extended thinking is expressed here as low|medium|high thinking budget.
   externalProvider("anthropic", "Anthropic", "anthropic", "claude-sonnet-5", anthropicModels, "sk-ant-", ["low", "medium", "high"]),
-  localProvider("ollama", "Ollama", "llama3.3", ["llama3.3", "qwen2.5-coder", "mistral-small"]),
+  // llama3.1:8b is the default because it fits entirely in an 8GB card and is
+  // fast enough to sit behind a search that starts an agent on every Enter.
+  // llama3.3 stays selectable -- it is a 70B model, so it is a real choice on a
+  // workstation with the RAM for it, just not the one to ship pointing at.
+  localProvider("ollama", "Ollama", "llama3.1:8b", ["llama3.1:8b", "qwen2.5:14b", "llama3.3", "qwen2.5-coder", "mistral-small"]),
   localProvider("lm-studio", "LM Studio", "local-model", ["local-model", "openai-compatible"])
 ] as const;
 

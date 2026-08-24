@@ -9,6 +9,7 @@ import Database from "better-sqlite3";
 import { runMigrations } from "../../src/db/migrations/runner";
 import { AuditRepository } from "../../src/db/repositories/audit-repository";
 import { SearchRepository } from "../../src/db/repositories/search-repository";
+import { CasesRepository } from "../../src/db/repositories/cases-repository";
 import { VaultRepository } from "../../src/db/repositories/vault-repository";
 import { createSearchHandlers } from "../../src/main/ipc/handlers/search-handlers";
 import { SodiumVaultCrypto } from "../../src/main/security/vault-crypto";
@@ -35,8 +36,20 @@ async function harness() {
   const searchRepository = new SearchRepository(db);
   const crypto = await SodiumVaultCrypto.fromKey(new Uint8Array(32).fill(9));
   const vaultRepository = new VaultRepository(db, crypto, auditRepository);
-  const handlers = createSearchHandlers(searchRepository, auditRepository, [echoConnector], () => [], vaultRepository);
-  return { auditRepository, vaultRepository, handlers };
+  // The agent auto-run is recorded rather than executed: this test is about the
+  // vault gate, and a real agent would need a live model to say anything.
+  const agentRuns: unknown[] = [];
+  const agentRunner = { run: (input: unknown) => { agentRuns.push(input); return Promise.resolve(undefined); } };
+  const handlers = createSearchHandlers(
+    searchRepository,
+    auditRepository,
+    [echoConnector],
+    () => [],
+    vaultRepository,
+    agentRunner,
+    new CasesRepository(db)
+  );
+  return { agentRuns, auditRepository, vaultRepository, handlers };
 }
 
 it("reads a stored key through the audited vault gate and hands it to the connector", async () => {

@@ -26,7 +26,12 @@ export const dnsDohConnector: SourceConnector = {
         const url = new URL("https://cloudflare-dns.com/dns-query");
         url.searchParams.set("name", seed.value);
         url.searchParams.set("type", recordType);
-        const payload = await context.fetchJson(url.toString(), { signal: context.signal });
+        // Cloudflare gates its JSON DoH responses on this media type; the
+        // generic application/json default is answered with a 400.
+        const payload = await context.fetchJson(url.toString(), {
+          headers: { accept: "application/dns-json" },
+          signal: context.signal
+        });
         return parseDnsAnswer(seed, recordType, payload);
       })
     );

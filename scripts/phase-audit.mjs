@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const MAX_PHASE = 14;
+const MAX_PHASE = 15;
 const requestedPhase = Number(process.argv[2]);
 const repoRoot = process.cwd();
 
@@ -405,6 +405,61 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("lists six methodology phases with authorization-aware tools", "methodology six phases and authorization");
   assertAnyTestIncludes("exports coverage spreadsheet CSV", "methodology coverage export");
   assertAnyTestIncludes("renders six connected methodology phases and stays read-only", "methodology connected read-only route behavior");
+} else if (requestedPhase === 15) {
+  // Real agent execution. The old runtime read a prompt file only to count its
+  // characters, so "an agent ran" has to mean a provider was called and what it
+  // returned was checked, not that a template rendered.
+  assertIncludes("src/main/providers/chat-providers.ts", "OllamaChatProvider", "real chat provider mechanism");
+  assertIncludes("src/main/providers/chat-providers.ts", "UnavailableChatProvider", "unwired provider fails loudly mechanism");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "provider.complete", "agent runtime calls a real model mechanism");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "context.citations.has", "citation-integrity filter mechanism");
+  assertIncludes("src/db/migrations/025-scout-byte-agent-defaults.ts", "scout-agent", "scout/byte free-provider and prompt migration mechanism");
+  assertAnyTestIncludes("instead of a template, so two seeds cannot produce identical findings", "agent output comes from the provider");
+  assertAnyTestIncludes("so a fabricated source cannot reach memory", "ungrounded citation rejected");
+  assertAnyTestIncludes("instead of falling back to fake text", "unwired provider fails the run");
+  assertAnyTestIncludes("retries malformed JSON exactly once", "malformed model JSON retry");
+
+  // The two process-backed scripts join the passive fan-out as ordinary
+  // connectors, so they inherit failure isolation and the abort signal.
+  assertIncludes("src/main/search/connectors/sherlock-connector.ts", "createSherlockConnector", "sherlock search connector mechanism");
+  assertIncludes("src/main/search/connectors/scrapegraph-connector.ts", "keySource: \"openai\"", "scrapegraph vault-gated key mechanism");
+  assertIncludes("src/main/search/source-connector.ts", "timeoutMs", "per-connector timeout mechanism");
+  assertIncludes("src/main/ipc/register.ts", "passiveSearchConnectors", "process-backed connectors registered mechanism");
+  assertAnyTestIncludes("so a seed with shell metacharacters stays inert data", "sherlock argv injection safety");
+  assertAnyTestIncludes("split across two stdout chunks", "sherlock chunked output parsing");
+  assertAnyTestIncludes("before it reaches the results board", "scrapegraph key redaction");
+
+  // One Enter runs the whole profile: main starts the agent after the search
+  // and the board renders without waiting for the model.
+  assertIncludes("src/main/ipc/handlers/search-handlers.ts", "startAgent", "search auto-runs the OSINT agent mechanism");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "observation:", "search observations are citable mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "onAgentEvent", "search surface streams agent events mechanism");
+  assertIncludes("src/renderer/components/search-view.tsx", "search-intake", "live intake panel mechanism");
+  assertAnyTestIncludes("so it can cite real evidence", "agent receives the run observations");
+  assertAnyTestIncludes("without waiting for the agent", "search reply is not blocked by the model");
+  assertAnyTestIncludes("instead of minting a case per Enter", "auto-run reuses one open case");
+  assertAnyTestIncludes("so one Enter produces the whole profile", "agent finding renders on the search board");
+
+  // The five blockers that stopped any of the above from working on real
+  // hardware. Each one was a silent failure, so each gets a pinned mechanism.
+  assertIncludes("src/main/search/http.ts", "headers.has(\"accept\")", "caller-supplied accept header survives mechanism");
+  assertIncludes("src/main/search/connectors/dns-doh-connector.ts", "application/dns-json", "DoH media type mechanism");
+  assertAnyTestIncludes("the only media type its JSON API answers", "DoH accept header");
+
+  assertIncludes("src/db/migrations/026-runnable-agent-models.ts", "llama3.1:8b", "runnable agent model migration mechanism");
+  assertIncludes("src/main/providers/provider-adapters.ts", "llama3.1:8b", "selectable runnable model mechanism");
+  assertAnyTestIncludes("keeps its 70B pick", "deliberate model choice preserved");
+
+  assertIncludes("src/main/providers/chat-providers.ts", "AnthropicChatProvider", "real Anthropic provider mechanism");
+  assertIncludes("src/main/providers/chat-providers.ts", "defaultChatProviders", "vault-injected provider key mechanism");
+  assertIncludes("src/main/agents/agent-runtime-service.ts", "effort: agent.reasoningEffort", "reasoning effort forwarded mechanism");
+  assertAnyTestIncludes("never from ambient environment", "Anthropic key comes from the vault");
+  assertAnyTestIncludes("stops being decorative", "reasoning effort reaches the provider");
+
+  assertIncludes("scripts/check-runtime.mjs", "Reacher runtime dependencies", "runtime doctor mechanism");
+  assertIncludes("scripts/setup-runtime.ps1", "ollama pull", "runtime setup script mechanism");
+  assertIncludes("package.json", "\"doctor\"", "doctor npm script mechanism");
+  assertIncludes("scripts/package-smoke.mjs", "scrapegraph-osint.py", "worker script is packaged mechanism");
 }
 
 if (process.exitCode) {

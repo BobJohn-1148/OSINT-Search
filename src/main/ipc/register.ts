@@ -23,6 +23,9 @@ import { SearchRepository } from "../../db/repositories/search-repository.js";
 import { ToolsRepository } from "../../db/repositories/tools-repository.js";
 import type { VaultCrypto } from "../security/vault-crypto.js";
 import { searchConnectors } from "../search/connectors/index.js";
+import { scrapeGraphConnector } from "../search/connectors/scrapegraph-connector.js";
+import { createSherlockConnector } from "../search/connectors/sherlock-connector.js";
+import type { SourceConnector } from "../search/source-connector.js";
 import { IPC, type IpcChannel, type IpcParsedRequest, type IpcResponse } from "../../shared/ipc.js";
 import { AgentRuntimeService } from "../agents/agent-runtime-service.js";
 import { AnalyzersService } from "../analyzers/analyzers-service.js";
@@ -57,6 +60,8 @@ import { ReportService } from "../reports/report-service.js";
 import { ScanService } from "../scans/scan-service.js";
 import { ToolsService } from "../tools/tools-service.js";
 import { WslToolLauncher } from "../tools/wsl-launcher.js";
+import { ChatProviderResolver, defaultChatProviders } from "../providers/chat-providers.js";
+import { DEFAULT_WSL_DISTRO, WSL_DISTRO_SETTING_KEY } from "../../shared/types/tools.js";
 import { ImageUsernameService } from "../image-username/image-username-service.js";
 import { MonitoringService } from "../monitoring/monitoring-service.js";
 import { DashboardService } from "../dashboard/dashboard-service.js";
@@ -96,13 +101,24 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
       webContents.send("agent:events", { events });
     }
   };
+  // Keyed chat providers read their secret here, at the one audited gate, rather
+  // than from ambient environment inside the provider -- same rule the keyed
+  // search connectors follow.
+  const chatProviderResolver = new ChatProviderResolver(
+    defaultChatProviders((source, purpose) =>
+      vaultRepository.has(source) ? vaultRepository.readSecret(source, "local-user", purpose) : null
+    )
+  );
   const agentRuntimeService = new AgentRuntimeService(
     agentsRepository,
     agentRuntimeRepository,
     casesRepository,
     auditRepository,
     emitAgentEvents,
-    app.getAppPath()
+    app.getAppPath(),
+    // Clock stays defaulted; only the resolver below needs injecting.
+    undefined,
+    chatProviderResolver
   );
   const dashboardService = new DashboardService(dashboardRepository, auditRepository, agentRuntimeService);
   const emitToolOutput = (event: ToolOutputEvent): void => {
@@ -177,6 +193,19 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     { pdf: createPdfRenderer(), docx: createDocxRenderer() },
     path.join(app.getPath("userData"), "reports")
   );
+  // The process-backed connectors cannot live in the static registry: Sherlock
+  // needs the WSL launcher and the distro Jack configured in Settings, neither of
+  // which exists until this composition root has run. Appending them here keeps
+  // connectors/index.ts a plain, importable list for the phase audit and tests.
+  const passiveSearchConnectors: readonly SourceConnector[] = [
+    ...searchConnectors,
+    scrapeGraphConnector,
+    createSherlockConnector(
+      wslToolLauncher,
+      () => settingsRepository.get(WSL_DISTRO_SETTING_KEY) ?? DEFAULT_WSL_DISTRO
+    )
+  ];
+
   const handlers: HandlerMap = {
     ...createSystemHandlers(
       auditRepository,
@@ -228,9 +257,11 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createSearchHandlers(
       searchRepository,
       auditRepository,
-      searchConnectors,
+      passiveSearchConnectors,
       () => BrowserWindow.getAllWindows().map((window) => window.webContents),
-      vaultRepository
+      vaultRepository,
+      agentRuntimeService,
+      casesRepository
     )
   };
 
