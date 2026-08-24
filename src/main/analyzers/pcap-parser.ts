@@ -15,8 +15,30 @@ export function buildTsharkArgv(filePath: string): string[] {
   return ["tshark", "-r", filePath, "-T", "json"];
 }
 
+/**
+ * tshark's own JSON output is a top-level array only on the happy path.
+ * Confirmed by direct testing: an empty capture produces empty stdout (a
+ * JSON.parse syntax error, not an empty array), and a failed/rejected
+ * capture reports a single `{"error": "..."}` object instead -- both throw
+ * an unguarded `for...of` "not iterable" error identical in kind to the EVTX
+ * parser crash found earlier, if trusted without a shape check first.
+ */
 export function parseTsharkJson(json: string): PcapConversation[] {
-  const packets = JSON.parse(json) as PacketShape[];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    throw new Error("tshark produced no parseable JSON output -- the capture may be empty or tshark may have failed silently");
+  }
+  if (!Array.isArray(parsed)) {
+    const reported = objectValue(parsed).error;
+    throw new Error(
+      typeof reported === "string"
+        ? `tshark reported an error instead of packet data: ${reported}`
+        : `tshark output was not a JSON array of packets -- got ${parsed === null ? "null" : typeof parsed}`
+    );
+  }
+  const packets = parsed as PacketShape[];
   const conversations = new Map<string, PcapConversation>();
   for (const packet of packets) {
     const layers = packet._source?.layers ?? {};
@@ -32,6 +54,10 @@ export function parseTsharkJson(json: string): PcapConversation[] {
     conversations.set(key, { ...existing, packets: existing.packets + 1, bytes: existing.bytes + bytes });
   }
   return [...conversations.values()].sort((a, b) => b.packets - a.packets || a.source.localeCompare(b.source));
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function firstLayerValue(layers: Record<string, unknown>, keys: readonly string[]): string {

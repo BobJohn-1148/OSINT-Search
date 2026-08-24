@@ -94,6 +94,47 @@ it("launcher times out and kills the process tree so stuck WSL children do not s
   expect(killed).toEqual([123]);
 });
 
+it("a per-call timeoutMs overrides the constructor default, so a connector's own longer timeout actually reaches the process", async () => {
+  // Sherlock declared timeoutMs: 180_000 to the orchestrator but never passed
+  // it to launcher.run(), so every WSL call still died at the launcher's
+  // fixed 60s default regardless of what the caller asked for. This proves
+  // the fix: a short constructor default does not fire early when the call
+  // itself asks for a longer one.
+  const killed: number[] = [];
+  const children: FakeChildProcess[] = [];
+  const launcher = new WslToolLauncher(
+    () => {
+      const child = createFakeChild(456);
+      children.push(child);
+      return child;
+    },
+    { processTimeoutMs: 1, killProcessTree: (pid) => killed.push(pid) }
+  );
+
+  const run = launcher.run({ runId: "long-call", wslDistro: "Ubuntu", argv: ["sherlock", "alice"], timeoutMs: 60_000 });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(killed).toEqual([]);
+
+  children[0].emit("close", 0);
+  const result = await run;
+  expect(result.exitCode).toBe(0);
+  expect(killed).toEqual([]);
+});
+
+it("a per-call timeoutMs shorter than the constructor default fires on schedule", async () => {
+  const killed: number[] = [];
+  const launcher = new WslToolLauncher(
+    () => createFakeChild(789),
+    { processTimeoutMs: 60_000, killProcessTree: (pid) => killed.push(pid) }
+  );
+
+  const result = await launcher.run({ runId: "short-call", wslDistro: "Ubuntu", argv: ["sherlock", "alice"], timeoutMs: 1 });
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("timed out");
+  expect(killed).toEqual([789]);
+});
+
 it("launcher cancel kills the process tree and resolves the run", async () => {
   const killed: number[] = [];
   const child = createFakeChild(456);

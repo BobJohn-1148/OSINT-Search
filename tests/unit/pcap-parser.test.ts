@@ -41,3 +41,17 @@ it("pcap parser reads a fixture and never exposes a live capture argv so packet 
     }
   ]);
 });
+
+it("rejects empty tshark output with a clear message instead of a raw JSON syntax error", () => {
+  expect(() => parseTsharkJson("")).toThrow(/no parseable JSON output/);
+});
+
+it("surfaces tshark's own reported error instead of throwing 'not iterable' on a non-array response", () => {
+  expect(() => parseTsharkJson(JSON.stringify({ error: "capture file has no packets" }))).toThrow(
+    /tshark reported an error instead of packet data: capture file has no packets/
+  );
+});
+
+it("rejects a single un-wrapped packet object with a shape error instead of crashing on iteration", () => {
+  expect(() => parseTsharkJson(JSON.stringify({ _source: { layers: {} } }))).toThrow(/was not a JSON array of packets/);
+});

@@ -41,11 +41,16 @@ export function DashboardView() {
    */
   const checkReachability = useCallback((list: readonly WatchRecord[]): void => {
     for (const watch of list.filter((entry) => entry.type === "domain")) {
-      void invoke("watch:reachability", { watchId: watch.id }).then((result) => {
-        if (result.ok) {
-          setReachability((current) => ({ ...current, [watch.id]: result.value.online }));
-        }
-      });
+      invoke("watch:reachability", { watchId: watch.id })
+        .then((result) => {
+          if (result.ok) {
+            setReachability((current) => ({ ...current, [watch.id]: result.value.online }));
+          }
+        })
+        .catch(() => {
+          // A closed/reloaded window can reject an in-flight invoke; the light
+          // just stays "checking" rather than crashing the dashboard over it.
+        });
     }
   }, [invoke]);
 

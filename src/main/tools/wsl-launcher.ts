@@ -80,10 +80,16 @@ export class WslToolLauncher {
     readonly argv: readonly string[];
     readonly onOutput?: ToolOutputListener;
     readonly signal?: AbortSignal;
+    // Per-call override for a source-backed process that legitimately runs
+    // longer than the constructor's default (e.g. Sherlock sweeping hundreds
+    // of sites). Without this, every WslToolLauncher call shared one fixed
+    // timeout regardless of what the caller declared it needed, so a
+    // connector's own longer timeoutMs never actually reached the process.
+    readonly timeoutMs?: number;
   }): Promise<WslRunResult> {
     const invocation = buildWslInvocation(input.wslDistro, input.argv);
     return this.enqueue(input.runId, input.signal, () =>
-      this.runInvocation(input.runId, invocation, input.onOutput, input.signal)
+      this.runInvocation(input.runId, invocation, input.timeoutMs ?? this.processTimeoutMs, input.onOutput, input.signal)
     );
   }
 
@@ -168,6 +174,7 @@ export class WslToolLauncher {
   private runInvocation(
     runId: string,
     invocation: WslInvocation,
+    timeoutMs: number,
     onOutput?: ToolOutputListener,
     signal?: AbortSignal
   ): Promise<WslRunResult> {
@@ -202,7 +209,7 @@ export class WslToolLauncher {
       };
       timeoutRef.current = windowlessSetTimeout(() => {
         settle(1, stdout, appendCapped(stderr, "Process timed out and was canceled."), true);
-      }, this.processTimeoutMs);
+      }, timeoutMs);
       signal?.addEventListener("abort", abort, { once: true });
       this.runningCancels.set(runId, abort);
 

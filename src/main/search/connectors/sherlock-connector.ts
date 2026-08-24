@@ -74,6 +74,11 @@ export function createSherlockConnector(
         wslDistro: resolveDistro(),
         argv: sherlockArgv(username, outputDir),
         signal: context.signal,
+        // The launcher's own constructor default (60s) is shared by every WSL
+        // call unless overridden per-run -- without this, Sherlock's declared
+        // SHERLOCK_TIMEOUT_MS above only bounded the orchestrator's outer
+        // race, while the process itself still got killed at 60s regardless.
+        timeoutMs: SHERLOCK_TIMEOUT_MS,
         onOutput: (event) => {
           if (event.stream === "stdout") {
             consume(event.chunk);
