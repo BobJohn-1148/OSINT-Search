@@ -1587,6 +1587,73 @@ it("search board ignores agent events from other agents so an unrelated run cann
   expect(screen.queryByText("Unrelated malware finding")).not.toBeInTheDocument();
 });
 
+it("search board pins to the first osint-agent run it sees and ignores a later run of the SAME agent, so a stale run cannot overwrite a finding the investigator might save", async () => {
+  // The auto-started agent gets its own runId, unrelated to the search's own
+  // runId, so this can't be tested by mismatching agentId (the previous test)
+  // -- it has to be two events for the SAME agent with DIFFERENT runIds, which
+  // is exactly what a slow previous run still streaming alongside a fresh
+  // "Re-run" click looks like on the wire.
+  const user = userEvent.setup();
+  let agentListener: ((batch: { readonly events: readonly unknown[] }) => void) | null = null;
+  Object.defineProperty(window, "reacher", {
+    configurable: true,
+    value: {
+      ...window.reacher,
+      onAgentEvent: vi.fn((_event: string, listener: (batch: { readonly events: readonly unknown[] }) => void) => {
+        agentListener = listener;
+        return () => {};
+      })
+    }
+  });
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "search:run") {
+      return Promise.resolve({
+        ok: true as const,
+        value: { run: minimalRun("search-run", { type: "domain", value: "example.com" }, "Example Registrar Inc") }
+      });
+    }
+    return Promise.resolve({ ok: true as const, value: { cases: [], watches: [], alerts: [], agents: [] } });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/search"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.type(screen.getByLabelText("Seed"), "example.com");
+  await user.click(screen.getByRole("button", { name: "Search" }));
+  await waitFor(() => {
+    expect(screen.getByRole("heading", { name: /Ocean agent/ })).toBeInTheDocument();
+  });
+
+  const findingEvent = (runId: string, title: string) => ({
+    type: "agent:finding",
+    finding: {
+      id: `f-${runId}`,
+      runId,
+      agentId: "osint-agent",
+      caseId: "c1",
+      title,
+      summary: "summary",
+      sources: ["seed:domain:example.com"],
+      confidence: 1,
+      savedItemId: null
+    }
+  });
+
+  act(() => {
+    agentListener?.({ events: [findingEvent("agent-run-a", "First run's finding")] });
+  });
+  expect(screen.getByText("First run's finding")).toBeInTheDocument();
+
+  act(() => {
+    agentListener?.({ events: [findingEvent("agent-run-b", "Stale later run's finding")] });
+  });
+  expect(screen.getByText("First run's finding")).toBeInTheDocument();
+  expect(screen.queryByText("Stale later run's finding")).not.toBeInTheDocument();
+});
+
 it("renders six connected methodology phases and stays read-only so the map cannot launch tools", async () => {
   const user = userEvent.setup();
   invokeMock.mockImplementation((channel: string) => {

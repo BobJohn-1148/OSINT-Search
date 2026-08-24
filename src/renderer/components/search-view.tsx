@@ -35,7 +35,7 @@ import {
   UserRound
 } from "lucide-react";
 import type { CSSProperties } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { AgentRecord } from "../../shared/schemas/agents";
 import type { AgentFinding, AgentStep } from "../../shared/schemas/agents-runtime";
@@ -77,6 +77,13 @@ export function SearchView() {
   const [agentSteps, setAgentSteps] = useState<AgentStep[]>([]);
   const [agentFinding, setAgentFinding] = useState<AgentFinding | null>(null);
   const [agentTask, setAgentTask] = useState<string | null>(null);
+  // The agent auto-started after a search gets its own runId, unrelated to the
+  // search's runId -- there is no id the renderer can compare against ahead of
+  // time. Instead this pins to whichever runId the FIRST agent event shows it
+  // after a reset, and rejects anything else: a slower, still-streaming run
+  // from a previous search (or "Re-run" click) cannot then overwrite the panel
+  // for a run the investigator has already moved on from and might save.
+  const currentAgentRunIdRef = useRef<string | null>(null);
   // Right-rail context. Loaded defensively: these channels may be absent in some
   // harnesses, so a malformed response can never crash the composer.
   const [cases, setCases] = useState<CaseRecord[]>([]);
@@ -92,15 +99,26 @@ export function SearchView() {
     });
     // Every agent shares one event channel, so filter to the agent this surface
     // auto-runs; a run started from the agents view must not redraw this panel.
+    // Within that agent, also filter to the run this panel is currently
+    // showing -- see currentAgentRunIdRef above.
+    const acceptForCurrentRun = (eventRunId: string): boolean => {
+      currentAgentRunIdRef.current ??= eventRunId;
+      return eventRunId === currentAgentRunIdRef.current;
+    };
     const removeAgentListener = window.reacher.onAgentEvent("agent:events", (batch) => {
       for (const event of batch.events) {
-        if (event.type === "agent:step" && event.step.agentId === OCEAN_AGENT_ID) {
+        if (event.type === "agent:step" && event.step.agentId === OCEAN_AGENT_ID && acceptForCurrentRun(event.step.runId)) {
           setAgentSteps((current) => [...current, event.step].slice(-40));
         }
-        if (event.type === "agent:finding" && event.finding.agentId === OCEAN_AGENT_ID) {
+        if (event.type === "agent:finding" && event.finding.agentId === OCEAN_AGENT_ID && acceptForCurrentRun(event.finding.runId)) {
           setAgentFinding(event.finding);
         }
-        if (event.type === "agent:state" && event.state.agentId === OCEAN_AGENT_ID) {
+        if (
+          event.type === "agent:state" &&
+          event.state.agentId === OCEAN_AGENT_ID &&
+          event.state.lastRunId !== null &&
+          acceptForCurrentRun(event.state.lastRunId)
+        ) {
           setAgentTask(event.state.status === "working" ? event.state.task : null);
         }
       }
@@ -148,6 +166,15 @@ export function SearchView() {
   const board = useMemo(() => (run ? computeBoard(run) : null), [run]);
 
   async function runSearch(pivotSeed?: SearchSeed): Promise<void> {
+    if (activeRunId) {
+      // Without this, a second Enter/click (or the "Search this further" pivot
+      // clicked while sources are still fanning out) started a fully
+      // independent search:run IPC call on top of the first -- two overlapping
+      // fan-outs writing into the same arrivals/observations state, since
+      // SourceStatus carries no runId of its own to filter by.
+      setStatus("A search is already running -- cancel it or wait for it to finish first.");
+      return;
+    }
     const seed = pivotSeed ?? activeSeed;
     if (!seed.value) {
       setStatus("Enter a seed before searching");
@@ -160,6 +187,7 @@ export function SearchView() {
     setAgentSteps([]);
     setAgentFinding(null);
     setAgentTask("queued behind the source fan-out");
+    currentAgentRunIdRef.current = null;
     setStatus("Launching passive sources");
     setLoadingLabel("Running correlation search");
     const runId = crypto.randomUUID();
@@ -226,6 +254,7 @@ export function SearchView() {
     setAgentSteps([]);
     setAgentFinding(null);
     setAgentTask("starting");
+    currentAgentRunIdRef.current = null;
     const targetCase = await ensureCase();
     const result = await invoke("agent:run", { agentId: OCEAN_AGENT_ID, seed: activeSeed, caseId: targetCase?.id });
     if (!result.ok) {
