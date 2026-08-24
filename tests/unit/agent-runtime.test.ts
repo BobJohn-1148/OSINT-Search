@@ -330,6 +330,21 @@ it("fails the run when nothing the model cited was in its context, rather than s
   expect(runtimeRepository.listMemory("global", 10)).toEqual([]);
 });
 
+it("retries a hallucinated citation exactly once, with the specific invented source fed back, then succeeds on a grounded response", async () => {
+  const provider = new RecordingChatProvider("ollama", [
+    defaultModelResponse(["seed:username:jdoe:Twitter"]),
+    defaultModelResponse(["seed:username:jdoe"])
+  ]);
+  const { service } = createRuntime(provider);
+
+  const result = await service.run({ agentId: "osint-agent", seed: { type: "username", value: "jdoe" } });
+
+  expect(provider.calls).toHaveLength(2);
+  expect(provider.calls[1]?.userPrompt).toContain("seed:username:jdoe:Twitter");
+  expect(provider.calls[1]?.userPrompt).toContain("did not match any of the citation keys");
+  expect(result.finding.sources).toEqual(["seed:username:jdoe"]);
+});
+
 it("fails loudly for a provider with no real model call instead of falling back to fake text", async () => {
   const { agentsRepository, runtimeRepository, service } = createRuntime();
   agentsRepository.setModel("osint-agent", "openai", "gpt-5.1");

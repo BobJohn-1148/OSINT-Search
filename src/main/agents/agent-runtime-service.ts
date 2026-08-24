@@ -263,27 +263,43 @@ export class AgentRuntimeService {
     return { memoryRows, caseItems, citations };
   }
 
+  /**
+   * A direct test against a real local model (llama3.1:8b) showed it can return
+   * perfectly valid JSON that still invents a citation -- "seed:username:jdoe:Twitter"
+   * in place of the one real key "seed:username:jdoe" -- fabricating a whole finding
+   * from nothing despite the prompt saying "never invent a source string" in as many
+   * words. The grounding filter correctly drops that citation, but before this
+   * change a parseable-yet-ungrounded response only got the single JSON-format
+   * retry below, which does nothing to fix a hallucinated source: the run just
+   * failed outright. Small local models miss prompt instructions more often than
+   * they miss JSON syntax, so grounding failure gets the same one-retry-with-the-
+   * specific-problem-fed-back treatment as a parse failure, not a worse one.
+   */
   private async runModel(agent: AgentRecord, prompt: string, seed: AgentSeed, context: AgentContext): Promise<ModelOutput> {
     const provider = this.chatProviders.resolve(agent.provider);
     const userPrompt = buildUserPrompt(seed, context.citations);
 
     const first = await provider.complete({ systemPrompt: prompt, userPrompt, model: agent.model, effort: agent.reasoningEffort });
-    const parsed = parseModelOutput(first.text);
-    if (parsed.ok) {
-      return parsed.value;
+    const firstResult = evaluateModelResponse(first.text, context.citations);
+    if (firstResult.ok) {
+      return firstResult.value;
     }
 
-    // One retry with the parse error fed back, because a local model dropping a
-    // brace is common and cheap to correct. A second failure fails the run:
-    // falling back to a template is the exact bug this service was rewritten to
-    // remove, so there is no third path.
-    const retryPrompt = `${userPrompt}\n\nYour previous response could not be parsed as the required JSON: ${parsed.error}\nRespond again with ONLY the JSON object -- no prose, no markdown code fences.`;
-    const retry = await provider.complete({ systemPrompt: prompt, userPrompt: retryPrompt, model: agent.model, effort: agent.reasoningEffort });
-    const retryParsed = parseModelOutput(retry.text);
-    if (retryParsed.ok) {
-      return retryParsed.value;
+    // One retry with the specific problem fed back, because a dropped brace or an
+    // invented citation are both common, cheap-to-correct local-model mistakes. A
+    // second failure fails the run: falling back to a template is the exact bug
+    // this service was rewritten to remove, so there is no third path.
+    const retry = await provider.complete({
+      systemPrompt: prompt,
+      userPrompt: `${userPrompt}\n\n${firstResult.retryHint}`,
+      model: agent.model,
+      effort: agent.reasoningEffort
+    });
+    const retryResult = evaluateModelResponse(retry.text, context.citations);
+    if (retryResult.ok) {
+      return retryResult.value;
     }
-    throw new Error(`${agent.name}'s model response was not valid JSON after one retry: ${retryParsed.error}`);
+    throw new Error(`${agent.name}'s model response ${retryResult.summary} after one retry`);
   }
 
   private readPrompt(promptPath: string): string {
@@ -317,4 +333,39 @@ function parseModelOutput(text: string): { readonly ok: true; readonly value: Mo
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "unknown parse error" };
   }
+}
+
+type ModelResponseEvaluation =
+  | { readonly ok: true; readonly value: ModelOutput }
+  | { readonly ok: false; readonly summary: string; readonly retryHint: string };
+
+/**
+ * Parsing and grounding are checked together because both are "the response
+ * is unusable as-is" -- execute()'s own finding-sources check still runs
+ * downstream as a defensive backstop, but by the time a response gets there
+ * it should already be grounded, since a response that fails this check never
+ * makes it out of runModel without a retry.
+ */
+function evaluateModelResponse(text: string, citations: ReadonlyMap<string, string>): ModelResponseEvaluation {
+  const parsed = parseModelOutput(text);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      summary: "was not valid JSON",
+      retryHint: `Your previous response could not be parsed as the required JSON: ${parsed.error}\nRespond again with ONLY the JSON object -- no prose, no markdown code fences.`
+    };
+  }
+  const groundedFindingSources = parsed.value.finding.sources.filter((source) => citations.has(source));
+  if (groundedFindingSources.length === 0) {
+    return {
+      ok: false,
+      summary: `did not cite anything present in the context it was given (offered: ${parsed.value.finding.sources.join(", ") || "nothing"})`,
+      retryHint:
+        `Your finding's sources (${parsed.value.finding.sources.join(", ") || "none"}) did not match any of the citation keys ` +
+        "you were given. Copy a key EXACTLY as listed above, verbatim -- do not invent, abbreviate, or extend one. " +
+        "If nothing you were given actually supports a finding, cite the seed key itself with a low confidence rather " +
+        "than inventing a more specific source. Respond again with ONLY the JSON object."
+    };
+  }
+  return { ok: true, value: parsed.value };
 }
