@@ -180,7 +180,11 @@ function ResourceGroup(props: {
 
 function toolHref(tool: MethodologyPhase["tools"][number]): string {
   if (tool.surface === "Tools") {
-    return `/tools?tool=${encodeURIComponent(tool.id)}`;
+    // A "reference" tier entry (e.g. "run-records", "practice-labs") documents
+    // a concept, not a real tool_catalog row -- linking to a specific ?tool=
+    // id that doesn't exist left the Tools page silently showing its empty
+    // "Select a tool" state with no explanation. Land on the page generally.
+    return tool.tier === "reference" ? "/tools" : `/tools?tool=${encodeURIComponent(tool.id)}`;
   }
   if (tool.surface === "Search") {
     return "/search";

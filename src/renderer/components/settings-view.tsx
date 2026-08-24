@@ -274,9 +274,16 @@ export function SettingsView() {
             const provider = providers.find((candidate) => candidate.id === agent.provider) ?? providers[0];
             return (
               <div className="agent-row" key={agent.id}>
-                <div>
-                  <div className="provider-name">{agent.name}</div>
-                  <div className="status-text">{agent.promptPath}</div>
+                <div className="provider-name-row">
+                  <span
+                    className={`status-dot ${lightClass(provider.id, !provider.requiresKey || keyedSources.has(provider.keySource as KeySource))}`}
+                    aria-hidden="true"
+                    title={provider.requiresKey ? (keyedSources.has(provider.keySource as KeySource) ? "Key stored" : "Blocked: no key stored for this provider") : "Local provider, no key needed"}
+                  />
+                  <div>
+                    <div className="provider-name">{agent.name}</div>
+                    <div className="status-text">{agent.promptPath}</div>
+                  </div>
                 </div>
                 <label className="compact-field">
                   Provider

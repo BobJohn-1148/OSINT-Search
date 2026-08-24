@@ -91,7 +91,11 @@ export function MobileView() {
 
   const level: ConnectionLevel = detectError ? "error" : devices.length > 0 ? "connected" : "none";
   const activeDevice = devices[0] ?? null;
-  const collectedCategories = useMemo(() => devices.reduce((total, device) => total + device.dataTypes.length, 0), [devices]);
+  // "Available", not "collected": detectDevices only enumerates device
+  // presence (adb devices -l / idevice_id -l) -- it never actually runs any
+  // of dataTypes' own commands (getprop, pm list packages, dumpsys, etc.), so
+  // no category has actually been pulled from the device yet.
+  const availableCategories = useMemo(() => devices.reduce((total, device) => total + device.dataTypes.length, 0), [devices]);
 
   return (
     <section className="route-surface" aria-labelledby="mobile-title">
@@ -116,7 +120,7 @@ export function MobileView() {
       </div>
 
       <div className="mobile-stage">
-        <Handset level={level} device={activeDevice} collected={collectedCategories} lastDetectTs={lastDetectTs} />
+        <Handset level={level} device={activeDevice} available={availableCategories} lastDetectTs={lastDetectTs} />
 
         <div className="mobile-detail-column">
           <section className="console-panel mobile-panel">
@@ -132,7 +136,7 @@ export function MobileView() {
                   <div>
                     <strong>{device.label}</strong>
                     <span className="status-text">
-                      {platformLabel(device.platform)} · {device.dataTypes.length} categor{device.dataTypes.length === 1 ? "y" : "ies"} collected
+                      {platformLabel(device.platform)} · {device.dataTypes.length} categor{device.dataTypes.length === 1 ? "y" : "ies"} available
                     </span>
                   </div>
                 </div>
@@ -187,7 +191,7 @@ export function MobileView() {
  * do not have here), and the traffic-light plus device name make the connection
  * state readable at a glance.
  */
-function Handset(props: { readonly level: ConnectionLevel; readonly device: MobileDevice | null; readonly collected: number; readonly lastDetectTs: number | null }) {
+function Handset(props: { readonly level: ConnectionLevel; readonly device: MobileDevice | null; readonly available: number; readonly lastDetectTs: number | null }) {
   const wallpaperClass = props.device
     ? props.device.platform === "ios"
       ? "mobile-wallpaper-ios"
@@ -220,7 +224,7 @@ function Handset(props: { readonly level: ConnectionLevel; readonly device: Mobi
             <span className="iphone-lock-status">{connectionLabel(props.level)}</span>
             <strong className="iphone-lock-device">{props.device ? props.device.label : "No device"}</strong>
             <span className="iphone-lock-sub">
-              {props.device ? `${platformLabel(props.device.platform)} · ${props.collected} categories collected` : "Plug in & trust a phone"}
+              {props.device ? `${platformLabel(props.device.platform)} · ${props.available} categories available` : "Plug in & trust a phone"}
             </span>
           </div>
           <div className="iphone-lockbar" aria-hidden="true" />
