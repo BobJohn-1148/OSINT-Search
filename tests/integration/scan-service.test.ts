@@ -169,6 +169,63 @@ it("export includes the topology host table and service list so scan reports car
   expect(renderedModels[0]?.sections.find((section) => section.title === "Service list")?.lines.join("\n")).toContain("192.168.1.10 | 443/tcp | open | https | nginx 1.25");
 });
 
+it("fails a scan whose output was truncated by the capture cap instead of parsing corrupted XML", async () => {
+  const db = new Database(":memory:");
+  runMigrations(db);
+  const scansRepository = new ScansRepository(db);
+  const toolsRepository = new ToolsRepository(db);
+  const auditRepository = new AuditRepository(db);
+  // A launcher that reports the exact condition the 5MB capture cap produces:
+  // exitCode 0 (nmap itself succeeded) but stdoutTruncated true, with stdout
+  // missing its opening <?xml ?><nmaprun> tag -- keeping only the trailing
+  // bytes is what a truncated capture actually looks like, and is not valid
+  // XML on its own even though the string is non-empty and plausible-looking.
+  const launcher = {
+    run: (): Promise<WslRunResult> =>
+      Promise.resolve({ stdout: "</host></nmaprun>", stderr: "", exitCode: 0, stdoutTruncated: true })
+  };
+  const service = new ScanService(scansRepository, toolsRepository, auditRepository, launcher, () => undefined);
+  toolsRepository.createAuthorization({
+    target: "192.168.1.0/24",
+    tier: "active",
+    expiresTs: new Date(Date.now() + 60_000).toISOString()
+  });
+
+  const result = await service.run({ target: "192.168.1.0/24", wslDistro: "Ubuntu", options: scanOptions() });
+
+  expect(result.scan.status).toBe("failed");
+  expect(result.scan.stderr).toContain("exceeded the 5MB capture limit");
+  expect(result.hosts).toEqual([]);
+});
+
+it("fails a scan on an unexpected parse error instead of leaving the run stuck at 'running' forever", async () => {
+  const db = new Database(":memory:");
+  runMigrations(db);
+  const scansRepository = new ScansRepository(db);
+  const toolsRepository = new ToolsRepository(db);
+  const auditRepository = new AuditRepository(db);
+  // Not a truncation case -- exitCode 0, stdoutTruncated false/absent, but the
+  // XML is malformed for some other reason. Before this fix, parseNmapXml
+  // throwing here propagated straight out of ScanService.run() and finishRun
+  // was never reached, so the scans row stayed at status "running" permanently.
+  const launcher = {
+    run: (): Promise<WslRunResult> =>
+      Promise.resolve({ stdout: '<nmaprun><host attr="unterminated></nmaprun>', stderr: "", exitCode: 0 })
+  };
+  const service = new ScanService(scansRepository, toolsRepository, auditRepository, launcher, () => undefined);
+  toolsRepository.createAuthorization({
+    target: "192.168.1.0/24",
+    tier: "active",
+    expiresTs: new Date(Date.now() + 60_000).toISOString()
+  });
+
+  const result = await service.run({ target: "192.168.1.0/24", wslDistro: "Ubuntu", options: scanOptions() });
+
+  expect(result.scan.status).toBe("failed");
+  expect(result.scan.stderr).toContain("Could not parse nmap output");
+  expect(scansRepository.get(result.scan.id).scan?.status).not.toBe("running");
+});
+
 function scanOptions(overrides: Partial<ScanOptions> = {}): ScanOptions {
   return {
     scanType: "quick-top-100",

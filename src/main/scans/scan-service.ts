@@ -78,12 +78,33 @@ export class ScanService {
       argv,
       onOutput: (event) => this.emitOutput({ scanId: started.id, stream: event.stream, chunk: event.chunk })
     });
-    const parsedHosts = result.exitCode === 0 ? parseNmapXml(result.stdout) : [];
+    // A large scan (full-tcp, vuln-nse across a subnet) can produce more XML
+    // than the launcher's 5MB capture cap keeps; the cap keeps the *trailing*
+    // bytes, so truncated output has lost its opening tag and is no longer a
+    // well-formed document. Parsing it anyway threw uncaught (the same
+    // "addChild"-class crash the EVTX parser had) on a scan that actually
+    // succeeded, and because that throw happened before finishRun, the row
+    // was left at status "running" forever with the real result discarded.
+    // Both failure modes -- known truncation and any other parse surprise --
+    // now always reach finishRun with a clear failed status instead.
+    let parsedHosts: ReturnType<typeof parseNmapXml> = [];
+    let parseError: string | null = null;
+    if (result.exitCode === 0) {
+      if (result.stdoutTruncated) {
+        parseError = "nmap output exceeded the 5MB capture limit and was truncated -- results are incomplete and were not parsed. Narrow the scan (fewer ports/hosts, or drop --script vuln) and re-run.";
+      } else {
+        try {
+          parsedHosts = parseNmapXml(result.stdout);
+        } catch (error) {
+          parseError = `Could not parse nmap output: ${error instanceof Error ? error.message : "unknown parse error"}`;
+        }
+      }
+    }
     const finished = this.scansRepository.finishRun({
       scanId: started.id,
-      status: result.exitCode === 0 ? "succeeded" : "failed",
+      status: result.exitCode === 0 && !parseError ? "succeeded" : "failed",
       stdout: result.stdout,
-      stderr: result.stderr,
+      stderr: parseError ? appendStderr(result.stderr, parseError) : result.stderr,
       hosts: toRepositoryHosts(parsedHosts),
       portsByAddress: toPortsByAddress(parsedHosts)
     });
@@ -143,6 +164,10 @@ export function buildNmapArgv(target: string, options: ScanOptions): string[] {
   }
   argv.push(target);
   return argv;
+}
+
+function appendStderr(stderr: string, message: string): string {
+  return stderr ? `${stderr}\n${message}` : message;
 }
 
 function validateCustomArgs(customArgs: readonly string[]): readonly string[] {

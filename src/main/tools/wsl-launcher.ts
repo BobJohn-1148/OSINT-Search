@@ -23,6 +23,15 @@ export interface WslRunResult {
   readonly stdout: string;
   readonly stderr: string;
   readonly exitCode: number;
+  // Set only when the 5MB capture cap actually trimmed stdout. Reproduced
+  // directly: appendCapped keeps the *trailing* bytes once the cap is hit, so
+  // a single-document output format (nmap -oX, wevtutil /f:xml) loses its
+  // opening tag and is no longer valid, well-formed data -- a caller that
+  // feeds truncated stdout to a document parser anyway gets the exact
+  // "addChild"-class crash the EVTX parser had, on a scan that actually
+  // succeeded. Optional so every non-stdout-truncating resolution path
+  // (cancel, timeout before any output, error) needs no change.
+  readonly stdoutTruncated?: boolean;
 }
 
 export type ToolOutputListener = (event: ToolOutputEvent) => void;
@@ -182,6 +191,7 @@ export class WslToolLauncher {
       let settled = false;
       let stdout = "";
       let stderr = "";
+      let stdoutTruncated = false;
       const child = this.spawnProcess(invocation.command, invocation.args, invocation.options);
       this.runningChildren.set(runId, child);
       child.stdout.pause();
@@ -202,7 +212,7 @@ export class WslToolLauncher {
         if (killTree) {
           this.terminateProcessTree(child);
         }
-        resolve({ stdout: finalStdout, stderr: finalStderr, exitCode });
+        resolve({ stdout: finalStdout, stderr: finalStderr, exitCode, stdoutTruncated });
       };
       abort = (): void => {
         settle(1, stdout, appendCapped(stderr, "Process canceled."), true);
@@ -215,6 +225,9 @@ export class WslToolLauncher {
 
       child.stdout.on("data", (chunk: Buffer) => {
         const text = chunk.toString("utf8");
+        if (Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(text, "utf8") > MAX_CAPTURE_BYTES) {
+          stdoutTruncated = true;
+        }
         stdout = appendCapped(stdout, text);
         applyBackpressure(child.stdout, stdout);
         onOutput?.({ runId, stream: "stdout", chunk: text });
