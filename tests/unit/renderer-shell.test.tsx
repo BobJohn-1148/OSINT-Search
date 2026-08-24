@@ -93,6 +93,9 @@ function createDefaultInvokeMock() {
     if (channel === "mobile:detect") {
       return Promise.resolve({ ok: true as const, value: { devices: [], unavailableTools: ["adb"] } });
     }
+    if (channel === "mobile:snapshots") {
+      return Promise.resolve({ ok: true as const, value: { snapshots: [] } });
+    }
     if (channel === "social:analyze") {
       return Promise.resolve({
         ok: true as const,

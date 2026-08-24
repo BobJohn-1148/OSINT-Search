@@ -14,6 +14,7 @@ import { AuditRepository } from "../../db/repositories/audit-repository.js";
 import { CasesRepository } from "../../db/repositories/cases-repository.js";
 import { DashboardRepository } from "../../db/repositories/dashboard-repository.js";
 import { ImageSearchRepository } from "../../db/repositories/image-search-repository.js";
+import { MobileRepository } from "../../db/repositories/mobile-repository.js";
 import { MonitoringRepository } from "../../db/repositories/monitoring-repository.js";
 import { ReportsRepository } from "../../db/repositories/reports-repository.js";
 import { ScansRepository } from "../../db/repositories/scans-repository.js";
@@ -85,6 +86,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const casesRepository = new CasesRepository(db);
   const dashboardRepository = new DashboardRepository(db);
   const imageSearchRepository = new ImageSearchRepository(db);
+  const mobileRepository = new MobileRepository(db);
   const monitoringRepository = new MonitoringRepository(db);
   const reportsRepository = new ReportsRepository(db);
   const scansRepository = new ScansRepository(db);
@@ -93,7 +95,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const toolsRepository = new ToolsRepository(db);
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
   const wslToolLauncher = new WslToolLauncher();
-  const mobileService = new MobileService();
+  const mobileService = new MobileService(mobileRepository, auditRepository);
   const socialAnalyzerService = new SocialAnalyzerService();
   const methodologyService = new MethodologyService();
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {

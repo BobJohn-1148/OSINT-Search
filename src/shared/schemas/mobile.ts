@@ -40,8 +40,23 @@ export const mobileDetectResponseSchema = z.object({
   unavailableTools: z.array(z.string().min(1))
 });
 
+export const mobileSnapshotSchema = z.object({
+  id: z.string().min(1),
+  platform: z.enum(mobilePlatformValues),
+  deviceId: z.string().min(1),
+  label: z.string().min(1),
+  dataTypeIds: z.array(z.string().min(1)),
+  capturedTs: z.string().min(1)
+});
+
+export const mobileSnapshotsRequestSchema = z.object({ limit: z.number().int().min(1).max(200).default(50) });
+export const mobileSnapshotsResponseSchema = z.object({ snapshots: z.array(mobileSnapshotSchema) });
+
 export type MobilePlatform = (typeof mobilePlatformValues)[number];
 export type MobileDataType = z.infer<typeof mobileDataTypeSchema>;
 export type MobileDevice = z.infer<typeof mobileDeviceSchema>;
 export type MobileProfilesResponse = z.infer<typeof mobileProfilesResponseSchema>;
 export type MobileDetectResponse = z.infer<typeof mobileDetectResponseSchema>;
+export type MobileSnapshot = z.infer<typeof mobileSnapshotSchema>;
+export type MobileSnapshotsRequest = z.infer<typeof mobileSnapshotsRequestSchema>;
+export type MobileSnapshotsResponse = z.infer<typeof mobileSnapshotsResponseSchema>;

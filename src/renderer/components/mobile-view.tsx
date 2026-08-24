@@ -9,9 +9,9 @@
  * available/blocked light. Nothing here executes a device command — it previews
  * scope and reflects what a detect pass reported.
  */
-import { BatteryFull, RefreshCw, ShieldCheck, Signal, Smartphone, Wifi } from "lucide-react";
+import { BatteryFull, History, RefreshCw, ShieldCheck, Signal, Smartphone, Wifi } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MobileDevice, MobilePlatform, MobileProfilesResponse } from "../../shared/schemas/mobile";
+import type { MobileDevice, MobilePlatform, MobileProfilesResponse, MobileSnapshot } from "../../shared/schemas/mobile";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
 type ConnectionLevel = "connected" | "error" | "none";
@@ -26,6 +26,14 @@ export function MobileView() {
   const [detectError, setDetectError] = useState(false);
   const [autoDetect, setAutoDetect] = useState(true);
   const [lastDetectTs, setLastDetectTs] = useState<number | null>(null);
+  const [snapshots, setSnapshots] = useState<MobileSnapshot[]>([]);
+
+  const refreshSnapshots = useCallback(async () => {
+    const result = await invoke("mobile:snapshots", { limit: 20 });
+    if (result.ok) {
+      setSnapshots(result.value.snapshots);
+    }
+  }, [invoke]);
 
   const refreshProfiles = useCallback(async () => {
     setLoadingLabel("Loading mobile profiles");
@@ -62,16 +70,20 @@ export function MobileView() {
           : "No trusted device attached"
       );
       setLoadingLabel("");
+      if (result.value.devices.length > 0) {
+        void refreshSnapshots();
+      }
     },
-    [invoke]
+    [invoke, refreshSnapshots]
   );
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
       void refreshProfiles();
+      void refreshSnapshots();
     }, 0);
     return () => window.clearTimeout(timeoutId);
-  }, [refreshProfiles]);
+  }, [refreshProfiles, refreshSnapshots]);
 
   // Auto-collect on plug-in: while enabled, quietly re-run detect so a phone that
   // is trusted after the page opens still lands in the console without a click.
@@ -147,6 +159,28 @@ export function MobileView() {
                   <ShieldCheck size={14} aria-hidden="true" /> Missing bridge tools: {unavailableTools.join(", ")}
                 </p>
               ) : null}
+            </div>
+          </section>
+
+          <section className="console-panel mobile-panel" aria-label="Detection history">
+            <div className="section-title-row section-title-row-wide">
+              <h2 className="section-title">Detection history</h2>
+              <History size={16} aria-hidden="true" />
+            </div>
+            <div className="table-list">
+              {snapshots.map((snapshot) => (
+                <div className="mobile-device-row" key={snapshot.id}>
+                  <span className="status-dot status-dot-verified" aria-hidden="true" />
+                  <div>
+                    <strong>{snapshot.label}</strong>
+                    <span className="status-text">
+                      {platformLabel(snapshot.platform)} · {new Date(snapshot.capturedTs).toLocaleString()} · {snapshot.dataTypeIds.length} categor
+                      {snapshot.dataTypeIds.length === 1 ? "y" : "ies"} available
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {snapshots.length === 0 ? <p className="status-text">No detections recorded yet.</p> : null}
             </div>
           </section>
 

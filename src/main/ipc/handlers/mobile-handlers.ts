@@ -4,11 +4,12 @@
  * could turn into an unreviewed extraction console.
  */
 import type { MobileService } from "../../mobile/mobile-service.js";
-import type { MobileDetectResponse, MobileProfilesResponse } from "../../../shared/schemas/mobile.js";
+import type { MobileDetectResponse, MobileProfilesResponse, MobileSnapshotsRequest, MobileSnapshotsResponse } from "../../../shared/schemas/mobile.js";
 
 export function createMobileHandlers(mobileService: MobileService) {
   return {
     "mobile:profiles": (): MobileProfilesResponse => mobileService.profiles(),
-    "mobile:detect": async (): Promise<MobileDetectResponse> => mobileService.detect()
+    "mobile:detect": async (): Promise<MobileDetectResponse> => mobileService.detect(),
+    "mobile:snapshots": (request: MobileSnapshotsRequest): MobileSnapshotsResponse => mobileService.snapshots(request.limit)
   };
 }

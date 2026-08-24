@@ -3,9 +3,18 @@
  * inventory is host IO. If the renderer ran adb or parsed arbitrary commands,
  * phone access would bypass typed IPC and the audit trail for sensitive device
  * metadata would be impossible to reason about.
+ *
+ * Every successful detect() also persists one snapshot row per device (via
+ * MobileRepository) and one audit event for the pass as a whole. Without this,
+ * "what phone was here and when" was unanswerable after the fact -- detect()
+ * only ever returned an in-memory list to the renderer and nothing else in the
+ * app recorded that a device probe touched sensitive inventory data, unlike
+ * every other analyzer (EVTX, PCAP, email headers) which all audit on import.
  */
 import { execFile } from "node:child_process";
-import type { MobileDataType, MobileDetectResponse, MobileProfilesResponse } from "../../shared/schemas/mobile.js";
+import type { MobileDataType, MobileDetectResponse, MobileProfilesResponse, MobileSnapshotsResponse } from "../../shared/schemas/mobile.js";
+import type { AuditRepository } from "../../db/repositories/audit-repository.js";
+import type { MobileRepository } from "../../db/repositories/mobile-repository.js";
 
 export type MobileCommandRunner = (
   command: string,
@@ -69,7 +78,11 @@ const iosDataTypes: readonly MobileDataType[] = [
 ];
 
 export class MobileService {
-  public constructor(private readonly runCommand: MobileCommandRunner = runFixedCommand) {}
+  public constructor(
+    private readonly mobileRepository: MobileRepository,
+    private readonly auditRepository: AuditRepository,
+    private readonly runCommand: MobileCommandRunner = runFixedCommand
+  ) {}
 
   public profiles(): MobileProfilesResponse {
     return {
@@ -98,7 +111,35 @@ export class MobileService {
       unavailableTools.push("libimobiledevice");
     }
 
+    for (const device of devices) {
+      this.mobileRepository.recordSnapshot({
+        platform: device.platform,
+        deviceId: device.id,
+        label: device.label,
+        dataTypeIds: device.dataTypes.map((dataType) => dataType.id)
+      });
+    }
+
+    if (devices.length > 0) {
+      this.auditRepository.record({
+        actor: "local-user",
+        action: "mobile.detect",
+        objectType: "mobile_detect",
+        objectId: null,
+        sensitivity: "high",
+        detail: {
+          deviceCount: devices.length,
+          platforms: [...new Set(devices.map((device) => device.platform))],
+          unavailableTools
+        }
+      });
+    }
+
     return { devices, unavailableTools };
+  }
+
+  public snapshots(limit: number): MobileSnapshotsResponse {
+    return { snapshots: this.mobileRepository.listSnapshots(limit) };
   }
 
   private async tryRun(command: string, args: readonly string[]) {

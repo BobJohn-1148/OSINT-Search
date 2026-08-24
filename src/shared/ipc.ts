@@ -117,7 +117,9 @@ import {
   mobileDetectRequestSchema,
   mobileDetectResponseSchema,
   mobileProfilesRequestSchema,
-  mobileProfilesResponseSchema
+  mobileProfilesResponseSchema,
+  mobileSnapshotsRequestSchema,
+  mobileSnapshotsResponseSchema
 } from "./schemas/mobile.js";
 import {
   methodologyExportRequestSchema,
@@ -751,8 +753,16 @@ export const IPC = {
     response: mobileDetectResponseSchema,
     capability: "mobile.detect",
     sensitivity: "high",
+    mutates: true,
+    summary: "Runs fixed local adb and libimobiledevice probes to list attached trusted devices, persisting a snapshot per device found."
+  }),
+  "mobile:snapshots": defineChannel({
+    request: mobileSnapshotsRequestSchema,
+    response: mobileSnapshotsResponseSchema,
+    capability: "mobile.readSnapshots",
+    sensitivity: "high",
     mutates: false,
-    summary: "Runs fixed local adb and libimobiledevice probes to list attached trusted devices."
+    summary: "Lists the most recent persisted device-detection snapshots."
   }),
   "social:analyze": defineChannel({
     request: socialAnalyzeRequestSchema,
