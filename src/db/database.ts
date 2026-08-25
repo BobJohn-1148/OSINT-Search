@@ -15,6 +15,12 @@ export function openDatabase(databasePath = defaultDatabasePath()): ReacherDatab
   const db = new Database(databasePath);
   db.pragma("foreign_keys = ON");
   db.pragma("journal_mode = WAL");
+  // better-sqlite3 defaults busy_timeout to 0 -- any momentary lock
+  // contention (a WAL checkpoint, antivirus briefly touching the -wal file)
+  // fails the operation immediately instead of waiting a beat and retrying.
+  // 5s matches what a single-writer desktop app needs without masking a
+  // genuine deadlock.
+  db.pragma("busy_timeout = 5000");
   return db;
 }
 
