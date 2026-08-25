@@ -5,9 +5,9 @@
  * light (green verified, yellow candidate/unverified, red absent) so template
  * coverage is never mistaken for cited evidence.
  */
-import { Search } from "lucide-react";
+import { Search, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { SocialCandidate } from "../../shared/schemas/social";
+import type { SocialCandidate, SocialCandidateStatus } from "../../shared/schemas/social";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
 type ProfileLight = "verified" | "candidate" | "absent";
@@ -36,7 +36,7 @@ export function SocialAnalyzerView() {
 
   async function analyze(): Promise<void> {
     setLoadingLabel("Generating social candidates");
-    const result = await invoke("social:analyze", { username, limit: 320 });
+    const result = await invoke("social:analyze", { username, limit: 700 });
     if (!result.ok) {
       setStatus(result.error.message);
       setLoadingLabel("");
@@ -48,6 +48,27 @@ export function SocialAnalyzerView() {
     setAnalyzedUsername(username.trim());
     setCandidateQuery("");
     setStatus(`Generated ${result.value.candidates.length} candidates from ${result.value.totalNetworks} networks`);
+    setLoadingLabel("");
+  }
+
+  async function verifyAll(): Promise<void> {
+    if (!analyzedUsername || candidates.length === 0) {
+      return;
+    }
+    setLoadingLabel(`Checking ${candidates.length} live sites — this can take a minute`);
+    const result = await invoke("social:verify", { username: analyzedUsername, limit: candidates.length });
+    if (!result.ok) {
+      setStatus(result.error.message);
+      setLoadingLabel("");
+      return;
+    }
+    setCandidates(result.value.candidates);
+    const verifiedCount = result.value.candidates.filter((candidate) => candidate.status === "verified").length;
+    const absentCount = result.value.candidates.filter((candidate) => candidate.status === "absent").length;
+    setStatus(
+      `Checked ${result.value.checkedCount} sites — ${verifiedCount} confirmed, ${absentCount} absent, ` +
+        `${result.value.skippedCount} skipped (protected against direct checks)`
+    );
     setLoadingLabel("");
   }
 
@@ -81,10 +102,21 @@ export function SocialAnalyzerView() {
       {candidates.length > 0 ? (
         <div className="social-results">
           <section className="console-panel social-plan-panel" aria-label="Verification plan">
-            <div className="social-legend">
-              <span><span className="status-dot status-dot-verified" /> verified profile</span>
-              <span><span className="status-dot status-dot-candidate" /> candidate (unverified)</span>
-              <span><span className="status-dot status-dot-absent" /> no profile</span>
+            <div className="section-title-row section-title-row-wide">
+              <div className="social-legend">
+                <span><span className="status-dot status-dot-verified" /> verified profile</span>
+                <span><span className="status-dot status-dot-candidate" /> candidate (unverified)</span>
+                <span><span className="status-dot status-dot-absent" /> no profile</span>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Verify all candidates against live sites"
+                title="Check every candidate for real, using each site's own exists/missing rule"
+                onClick={() => void verifyAll()}
+              >
+                <ShieldCheck size={16} aria-hidden="true" />
+              </button>
             </div>
             <p className="status-text">
               {totalNetworks} networks scanned · verify with {recommendedTools.join(", ") || "the recommended tools"}
@@ -137,16 +169,17 @@ export function SocialAnalyzerView() {
 }
 
 /**
- * Map a candidate status to a traffic light. Generated rows are unverified, so
- * they are amber, not green — green is reserved for a confirmed hit and red for a
- * checked-and-absent one, ready for when verification data flows in.
+ * Map a candidate status to a traffic light. "unknown" (checked but the site's
+ * protection made the result unreliable, or the check hasn't run yet) reads
+ * the same amber as an unverified candidate -- both mean "not confirmed
+ * either way" -- but keeps its own word in the tooltip so a hover still tells
+ * the two apart.
  */
-function lightFor(status: string): ProfileLight {
-  const normalized = status.toLowerCase();
-  if (normalized.includes("verified") || normalized.includes("confirmed") || normalized.includes("found")) {
+function lightFor(status: SocialCandidateStatus): ProfileLight {
+  if (status === "verified") {
     return "verified";
   }
-  if (normalized.includes("absent") || normalized.includes("none") || normalized.includes("not")) {
+  if (status === "absent") {
     return "absent";
   }
   return "candidate";

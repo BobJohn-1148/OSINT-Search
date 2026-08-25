@@ -114,6 +114,24 @@ function createDefaultInvokeMock() {
         }
       });
     }
+    if (channel === "social:verify") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          username: "jdoe",
+          candidates: [
+            {
+              network: "Example social",
+              url: "https://example.test/jdoe",
+              fields: ["profile", "relationships", "images"],
+              status: "verified"
+            }
+          ],
+          checkedCount: 1,
+          skippedCount: 0
+        }
+      });
+    }
     if (channel === "methodology:list") {
       return Promise.resolve({
         ok: true as const,
@@ -2037,6 +2055,30 @@ it("mobile, social, settings, and audit routes complete fake-data utility workfl
         }
       });
     }
+    if (channel === "social:verify") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          username: "jdoe",
+          candidates: [
+            {
+              network: "Fakebook",
+              url: "https://example.test/jdoe",
+              fields: ["profile"],
+              status: "verified"
+            },
+            {
+              network: "PhotoWall",
+              url: "https://photos.example.test/jdoe",
+              fields: ["images", "profile"],
+              status: "absent"
+            }
+          ],
+          checkedCount: 2,
+          skippedCount: 0
+        }
+      });
+    }
     if (channel === "keys:list") {
       return Promise.resolve({ ok: true as const, value: { keys: [] } });
     }
@@ -2130,6 +2172,7 @@ it("mobile, social, settings, and audit routes complete fake-data utility workfl
       <AppFrame />
     </MemoryRouter>
   );
+  await user.type(screen.getByLabelText("Username"), "jdoe");
   await user.click(screen.getByRole("button", { name: "Analyze" }));
   expect(await screen.findByText("Fakebook")).toBeInTheDocument();
   expect(await screen.findByText("PhotoWall")).toBeInTheDocument();
@@ -2141,6 +2184,15 @@ it("mobile, social, settings, and audit routes complete fake-data utility workfl
   await user.clear(screen.getByLabelText("Search candidates"));
   await user.type(screen.getByLabelText("Search candidates"), "not-a-real-candidate");
   expect(await screen.findByText("No candidates match this search.")).toBeInTheDocument();
+  await user.clear(screen.getByLabelText("Search candidates"));
+
+  await user.click(screen.getByRole("button", { name: "Verify all candidates against live sites" }));
+  await waitFor(() => {
+    expect(invokeMock).toHaveBeenCalledWith("social:verify", { username: "jdoe", limit: 2 });
+  });
+  expect(await screen.findByText(/Checked 2 sites — 1 confirmed, 1 absent, 0 skipped/)).toBeInTheDocument();
+  expect(screen.getByTitle(/^verified/)).toBeInTheDocument();
+  expect(screen.getByTitle(/^absent/)).toBeInTheDocument();
   socialRender.unmount();
 
   const settingsRender = render(

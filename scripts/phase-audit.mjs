@@ -460,6 +460,34 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertIncludes("scripts/setup-runtime.ps1", "ollama pull", "runtime setup script mechanism");
   assertIncludes("package.json", "\"doctor\"", "doctor npm script mechanism");
   assertIncludes("scripts/package-smoke.mjs", "scrapegraph-osint.py", "worker script is packaged mechanism");
+
+  // Four items deliberately deferred out of the original audit pass because
+  // each was a real feature gap, not a one-line fix: mobile detection never
+  // persisted or audited anything; PDF export dropped non-Latin characters;
+  // the social analyzer's status was permanently stuck at "candidate" with no
+  // way to actually verify a candidate; and DNS-over-HTTPS lost every record
+  // type if any single one failed.
+  assertIncludes("src/db/repositories/mobile-repository.ts", "recordSnapshot", "mobile snapshot persistence mechanism");
+  assertIncludes("src/main/mobile/mobile-service.ts", "mobile.detect", "mobile detect audit mechanism");
+  assertIncludes("src/shared/ipc.ts", "mobile:snapshots", "mobile snapshot history IPC mechanism");
+  assertAnyTestIncludes("persists one snapshot per detected device", "mobile snapshot persistence test");
+  assertAnyTestIncludes("records one audit event per detect pass", "mobile detect audit test");
+
+  assertIncludes("src/main/reports/pdf-renderer.ts", "NON_LATIN1_PATTERN", "PDF Unicode fallback font mechanism");
+  if (!fs.existsSync(path.join(repoRoot, "assets/fonts/NotoSans-Variable.ttf"))) {
+    fail("embedded Noto Sans font asset is missing at assets/fonts/NotoSans-Variable.ttf");
+  }
+  assertAnyTestIncludes("keeps Cyrillic characters instead of dropping them", "PDF Cyrillic round-trip test");
+
+  assertIncludes("src/main/social/social-analyzer-service.ts", "public async verify", "social real-verification mechanism");
+  assertIncludes("src/main/social/social-network-catalog.generated.ts", "existsStatus", "real per-site detection rule mechanism");
+  assertIncludes("src/shared/schemas/social.ts", "\"verified\", \"absent\", \"unknown\"", "real candidate status enum mechanism");
+  assertIncludes("src/shared/ipc.ts", "social:verify", "social verification IPC mechanism");
+  assertAnyTestIncludes("marks a candidate verified only when the response matches", "social verification real-rule test");
+  assertAnyTestIncludes("never runs more than the configured number of probes at once", "social verification bounded concurrency test");
+
+  assertIncludes("src/main/search/connectors/dns-doh-connector.ts", "Promise.allSettled", "DNS-DoH partial-failure resilience mechanism");
+  assertAnyTestIncludes("keeps the other four record types' observations", "DNS-DoH partial failure test");
 }
 
 if (process.exitCode) {

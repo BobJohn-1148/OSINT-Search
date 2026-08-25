@@ -143,7 +143,9 @@ import {
 } from "./schemas/reports.js";
 import {
   socialAnalyzeRequestSchema,
-  socialAnalyzeResponseSchema
+  socialAnalyzeResponseSchema,
+  socialVerifyRequestSchema,
+  socialVerifyResponseSchema
 } from "./schemas/social.js";
 import {
   searchGetRequestSchema,
@@ -771,6 +773,14 @@ export const IPC = {
     sensitivity: "medium",
     mutates: false,
     summary: "Generates candidate public social profile URLs from the offline WhatsMyName catalog."
+  }),
+  "social:verify": defineChannel({
+    request: socialVerifyRequestSchema,
+    response: socialVerifyResponseSchema,
+    capability: "social.verify",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Checks each candidate profile URL against its network's real exists/missing detection rule."
   }),
   "methodology:list": defineChannel({
     request: methodologyListRequestSchema,

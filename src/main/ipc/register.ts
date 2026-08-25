@@ -96,7 +96,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
   const vaultRepository = new VaultRepository(db, vaultCrypto, auditRepository);
   const wslToolLauncher = new WslToolLauncher();
   const mobileService = new MobileService(mobileRepository, auditRepository);
-  const socialAnalyzerService = new SocialAnalyzerService();
+  const socialAnalyzerService = new SocialAnalyzerService(auditRepository);
   const methodologyService = new MethodologyService();
   const emitAgentEvents = (events: readonly AgentRuntimeEvent[]): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
