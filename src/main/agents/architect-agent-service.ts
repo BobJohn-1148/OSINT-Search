@@ -2,8 +2,20 @@
  * The architect service coordinates provider calls, confirmation, writes, audit,
  * and memory so no single layer can skip the owner gate. If React or the model
  * could apply directly, Codex output could mutate the repo without review.
+ *
+ * ask() and proposePlan() call a real model through the same ChatProviderResolver
+ * the OSINT runtime agents use (chat-providers.ts), not a second parallel
+ * provider system. Before this, CodexArchitectProvider/TemplateArchitectProvider
+ * built their output by string interpolation -- the exact bug the OSINT agents
+ * were rewritten to fix earlier, just never applied here because this agent
+ * reasons about code changes instead of investigation seeds. A plan's proposed
+ * files are filtered against what was actually cited, the same grounding
+ * discipline agent-runtime-service.ts enforces for OSINT findings: an architect
+ * that invents a file path it was never shown is exactly as wrong as an OSINT
+ * agent that invents a source.
  */
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 import type { AgentRuntimeRepository } from "../../db/repositories/agent-runtime-repository.js";
 import type { AgentsRepository } from "../../db/repositories/agents-repository.js";
 import type { AuditRepository } from "../../db/repositories/audit-repository.js";
@@ -11,15 +23,30 @@ import type {
   ArchitectApplyResponse,
   ArchitectAskResponse,
   ArchitectProposal,
-  ArchitectProposePlanResponse
+  ArchitectProposePlanResponse,
+  RepoCitation
 } from "../../shared/schemas/architect-agent.js";
 import { architectProposalSchema } from "../../shared/schemas/architect-agent.js";
+import type { AgentMemoryRecord } from "../../shared/schemas/agents-runtime.js";
+import { ChatProviderResolver } from "../providers/chat-providers.js";
 import type { ArchitectApplyExecutor } from "./architect-apply-executor.js";
 import { PlanArtifactApplyExecutor } from "./architect-apply-executor.js";
-import { ArchitectProviderResolver } from "./architect-chat-provider.js";
 import { RepoReadTool } from "./repo-read-tool.js";
 
 export type ConfirmArchitectApply = (proposal: ArchitectProposal) => boolean | Promise<boolean>;
+
+const MEMORY_CONTEXT_LIMIT = 50;
+
+const modelPlanStepSchema = z.object({
+  title: z.string().min(1),
+  files: z.array(z.string().min(1)).default([]),
+  reason: z.string().min(1)
+});
+
+const modelPlanSchema = z.object({
+  summary: z.string().min(1),
+  steps: z.array(modelPlanStepSchema).min(1)
+});
 
 export class ArchitectAgentService {
   private readonly proposals = new Map<string, ArchitectProposal>();
@@ -31,27 +58,28 @@ export class ArchitectAgentService {
     private readonly auditRepository: AuditRepository,
     repoRoot: string,
     private readonly confirmApply: ConfirmArchitectApply,
-    private readonly providerResolver = new ArchitectProviderResolver(),
+    private readonly providerResolver = new ChatProviderResolver(),
     private readonly applyExecutor: ArchitectApplyExecutor = new PlanArtifactApplyExecutor(repoRoot),
     private readonly now = () => new Date()
   ) {
     this.repoReadTool = this.createRepoReadTool(repoRoot);
   }
 
-  public ask(input: { readonly question: string; readonly files: readonly string[] }): ArchitectAskResponse {
+  public async ask(input: { readonly question: string; readonly files: readonly string[] }): Promise<ArchitectAskResponse> {
     const repoReadTool = this.requireRepoReadTool();
     const agent = this.agentsRepository.get("architect-agent");
     const citations = repoReadTool.readContext(input.files);
-    const memory = this.runtimeRepository.listMemory(undefined, 50);
+    const memory = this.runtimeRepository.listMemory(undefined, MEMORY_CONTEXT_LIMIT);
     const provider = this.providerResolver.resolve(agent.provider);
-    const answer = provider.ask({
-      provider: agent.provider,
-      model: agent.model,
-      prompt: repoReadTool.readText(agent.promptPath),
-      citations,
-      memory: memory.map((item) => `${item.key}: ${item.value}`),
-      question: input.question
-    });
+    const systemPrompt = repoReadTool.readText(agent.promptPath);
+    const userPrompt = buildAskPrompt(input.question, citations, memory);
+
+    const response = await provider.complete({ systemPrompt, userPrompt, model: agent.model, effort: agent.reasoningEffort, expectJson: false });
+    const answer = response.text.trim();
+    if (answer.length === 0) {
+      throw new Error(`${agent.name}'s model returned an empty answer`);
+    }
+
     this.auditRepository.record({
       actor: "local-user",
       action: "agent.architect.ask",
@@ -63,26 +91,43 @@ export class ArchitectAgentService {
     return { answer, citations, provider: agent.provider, model: agent.model, memoryCount: memory.length };
   }
 
-  public proposePlan(input: { readonly request: string; readonly files: readonly string[] }): ArchitectProposePlanResponse {
+  public async proposePlan(input: { readonly request: string; readonly files: readonly string[] }): Promise<ArchitectProposePlanResponse> {
     const repoReadTool = this.requireRepoReadTool();
     const agent = this.agentsRepository.get("architect-agent");
     const citations = repoReadTool.readContext(input.files);
-    const memory = this.runtimeRepository.listMemory(undefined, 50);
+    const memory = this.runtimeRepository.listMemory(undefined, MEMORY_CONTEXT_LIMIT);
     const provider = this.providerResolver.resolve(agent.provider);
-    const providerPlan = provider.proposePlan({
-      provider: agent.provider,
-      model: agent.model,
-      prompt: repoReadTool.readText(agent.promptPath),
-      citations,
-      memory: memory.map((item) => `${item.key}: ${item.value}`),
-      request: input.request
-    });
+    const systemPrompt = repoReadTool.readText(agent.promptPath);
+    const userPrompt = buildPlanPrompt(input.request, citations, memory);
+
+    const first = await provider.complete({ systemPrompt, userPrompt, model: agent.model, effort: agent.reasoningEffort, expectJson: true });
+    const firstResult = evaluatePlanResponse(first.text, citations);
+    const planResult = firstResult.ok
+      ? firstResult
+      : await (async () => {
+          // One retry with the specific problem fed back, mirroring
+          // agent-runtime-service.ts's evaluateModelResponse -- a dropped
+          // brace or a file path the model invented are both common,
+          // cheap-to-correct local-model mistakes.
+          const retry = await provider.complete({
+            systemPrompt,
+            userPrompt: `${userPrompt}\n\n${firstResult.retryHint}`,
+            model: agent.model,
+            effort: agent.reasoningEffort,
+            expectJson: true
+          });
+          return evaluatePlanResponse(retry.text, citations);
+        })();
+    if (!planResult.ok) {
+      throw new Error(`${agent.name}'s model response ${planResult.summary} after one retry`);
+    }
+
     const proposal = architectProposalSchema.parse({
       id: randomUUID(),
       agentId: "architect-agent",
       request: input.request,
-      summary: providerPlan.summary,
-      steps: providerPlan.steps,
+      summary: planResult.value.summary,
+      steps: planResult.value.steps,
       citations,
       provider: agent.provider,
       model: agent.model,
@@ -183,4 +228,93 @@ export class ArchitectAgentService {
     this.runtimeRepository.finishRun(run.id, "succeeded", this.now().toISOString());
     return run.id;
   }
+}
+
+function buildAskPrompt(question: string, citations: readonly RepoCitation[], memory: readonly AgentMemoryRecord[]): string {
+  return [
+    `Question: ${question}`,
+    "",
+    "Cited files (the only source material you may reason from):",
+    citations.map((citation) => `- ${citation.file}: ${citation.excerpt}`).join("\n") || "(none)",
+    "",
+    "Shared memory from earlier architect decisions:",
+    memory.map((row) => `- ${row.key}: ${row.value}`).join("\n") || "(none)",
+    "",
+    "Answer the question directly and plainly, grounded only in the cited files and memory above. Plain text, no JSON, no markdown code fences."
+  ].join("\n");
+}
+
+function buildPlanPrompt(request: string, citations: readonly RepoCitation[], memory: readonly AgentMemoryRecord[]): string {
+  return [
+    `Request: ${request}`,
+    "",
+    "Cited files (every file path in your plan's \"files\" arrays must be copied exactly from this list -- never invent a path):",
+    citations.map((citation) => `- ${citation.file}: ${citation.excerpt}`).join("\n") || "(none)",
+    "",
+    "Shared memory from earlier architect decisions:",
+    memory.map((row) => `- ${row.key}: ${row.value}`).join("\n") || "(none)",
+    "",
+    "Respond with ONLY a JSON object, no prose and no markdown code fences, matching exactly this shape:",
+    '{"summary": string, "steps": [{"title": string, "files": string[], "reason": string}]}'
+  ].join("\n");
+}
+
+type PlanEvaluation =
+  | { readonly ok: true; readonly value: z.infer<typeof modelPlanSchema> }
+  | { readonly ok: false; readonly summary: string; readonly retryHint: string };
+
+/**
+ * Parses the model's plan JSON and grounds every step's file list against
+ * what was actually cited -- a step whose files were all invented is dropped
+ * outright rather than kept with an empty files array, the same "ungrounded
+ * citation gets dropped, not trusted" rule agent-runtime-service.ts applies to
+ * OSINT findings. A step surviving with a filtered-but-empty files array would
+ * fail architectProposalSchema's own per-step minimum later (confirmed live:
+ * a real Ollama plan produced a mix of grounded and ungrounded steps, and the
+ * ungrounded ones crashed proposePlan on the schema parse instead of being
+ * silently dropped). If every step ends up ungrounded, the whole response is
+ * treated as ungrounded and retried once.
+ */
+function evaluatePlanResponse(text: string, citations: readonly RepoCitation[]): PlanEvaluation {
+  const stripped = text
+    .trim()
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/, "")
+    .trim();
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stripped);
+  } catch {
+    return {
+      ok: false,
+      summary: "was not valid JSON",
+      retryHint: `Your previous response could not be parsed as the required JSON shape. Respond again with ONLY the JSON object -- no prose, no markdown fences.`
+    };
+  }
+
+  const modelPlan = modelPlanSchema.safeParse(parsed);
+  if (!modelPlan.success) {
+    return {
+      ok: false,
+      summary: "did not match the required plan shape",
+      retryHint: `Your previous response did not match the required shape (${modelPlan.error.issues[0]?.message ?? "invalid"}). Respond again with ONLY the exact JSON shape requested.`
+    };
+  }
+
+  const citedFiles = new Set(citations.map((citation) => citation.file));
+  const groundedSteps = modelPlan.data.steps
+    .map((step) => ({ ...step, files: step.files.filter((file) => citedFiles.has(file)) }))
+    .filter((step) => step.files.length > 0);
+  if (groundedSteps.length === 0) {
+    const offered = [...new Set(modelPlan.data.steps.flatMap((step) => step.files))].join(", ") || "(none)";
+    return {
+      ok: false,
+      summary: `did not cite any of the files it was shown (offered: ${offered})`,
+      retryHint:
+        "None of the files in your plan's \"files\" arrays matched the cited files list. Every path must be copied exactly from the cited files -- respond again using only those paths."
+    };
+  }
+
+  return { ok: true, value: { summary: modelPlan.data.summary, steps: groundedSteps } };
 }

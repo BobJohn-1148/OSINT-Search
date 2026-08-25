@@ -22,8 +22,8 @@ it("selects model per agent so each prompt can switch providers independently", 
     promptPath: "planning/agent-prompts/osint-agent.md"
   });
   expect(agentsRepository.get("architect-agent")).toMatchObject({
-    provider: "openai",
-    model: "codex"
+    provider: "ollama",
+    model: "llama3.1:8b"
   });
 });
 

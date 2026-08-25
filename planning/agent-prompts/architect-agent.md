@@ -7,8 +7,10 @@ planning docs and `CLAUDE.md`. You turn a feature request into a built, tested,
 committed feature that matches the existing codebase.
 
 ## Model
-Runs on ChatGPT **Codex** (best available coding agent). Provider/model is
-switchable in Settings, but Codex is the default for this agent.
+Runs on local **Ollama** (`llama3.1:8b`) by default -- free, zero-cost, and the
+only model guaranteed to fit Jack's hardware (see migration 027). Anthropic and
+xAI are both wired to real calls and selectable in Settings for a stronger
+model when planning a larger change.
 
 ## On every task
 1. Read first: `CLAUDE.md`, the current phase plan under `planning/`, and the

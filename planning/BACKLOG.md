@@ -33,29 +33,45 @@ guessed at, since changing app-facing copy on a guess risks doing the wrong
 thing. If Jack meant the in-app wording too, say so specifically and it's a
 quick copy change.
 
-### xAI Grok via puter.com — recommended against, real alternative offered
-`https://developer.puter.com/tutorials/free-unlimited-grok-api/` routes
-requests through Puter's own servers (not local-first), is a browser-side
-library (`puter.js`, wrong runtime for the main-process `ChatProvider`
-architecture), needs a Puter.com account per user, and discloses no rate
-limits or data-retention terms. The right way to add real xAI Grok support is
-xAI's own API directly — same pattern as `AnthropicChatProvider` in
-`src/main/providers/chat-providers.ts` (API key in the vault, direct HTTPS
-call, no proxy). Not built yet; needs a go-ahead.
-
 ## Discovered, not yet actioned
 
-### The Architect agent still runs on template/string-interpolation responses
-Found while dead-code-sweeping `architect-chat-provider.ts`:
-`CodexArchitectProvider.ask()`/`.proposePlan()` build their output by string
-interpolation, not a real model call — the same bug the OSINT runtime agents
-(`AgentRuntimeService`, `ChatProviderResolver`) were rewritten to fix earlier
-this session, except the Architect agent (used for code-planning tasks, a
-separate feature from OSINT investigation) never got the equivalent
-treatment. Not fixed here — this is a real feature gap, not a quick patch,
-same category as the four items that opened this session's fixing pass.
+(none open right now)
 
 ## Recently completed (context for what NOT to redo)
+
+- The Architect agent ran on `CodexArchitectProvider`'s string-interpolated
+  output, never a real model call — the same class of bug the OSINT runtime
+  agents were rewritten to fix earlier, just never applied to the code-planning
+  agent. Fixed: `architect-agent-service.ts` now calls a real model through the
+  same `ChatProviderResolver` the OSINT agents use (`architect-chat-provider.ts`
+  deleted outright, not deprecated); migration 027 moves the agent off the
+  dead `openai`/`codex` seed onto a runnable `ollama`/`llama3.1:8b` default,
+  matching migration 026's pattern of never clobbering a deliberately-chosen
+  provider. `proposePlan()` reuses the same citation-grounding discipline
+  `agent-runtime-service.ts` applies to OSINT findings: a step whose files
+  were all invented is dropped, not trusted. Two real bugs only surfaced by
+  live-running `ask()`/`proposePlan()` against a real local Ollama (not just
+  the mocked test suite): (1) `OllamaChatProvider` hardcoded `format: "json"`
+  on every call, so `ask()`'s plain-prose prompt fought JSON mode and the
+  model answered literally `"{}"` — fixed with an `expectJson` field on
+  `ChatCompletionRequest`, defaulting to the old JSON-mode behavior so every
+  existing caller (OSINT agents) is unaffected, with `ask()` the one caller
+  that opts out; (2) a plan step whose files were all invented ended up with
+  an empty-but-present `files` array after grounding, which crashed
+  `architectProposalSchema`'s own per-step `min(1)` on the very next line —
+  fixed by dropping the whole ungrounded step instead of keeping it empty.
+  Verified against a real running Ollama (`llama3.1:8b`): `ask()` returned a
+  genuine sentence, `proposePlan()` returned a 3-step plan with zero
+  ungrounded file citations.
+- Built a real xAI Grok provider directly against xAI's own OpenAI-compatible
+  REST endpoint (`XaiChatProvider` in `chat-providers.ts`) rather than the
+  puter.com proxy tutorial that was floated and rejected (routes through a
+  third party, browser-only library, no local-first guarantee). Live curl
+  testing against the real API caught two wrong assumptions in the
+  pre-existing code: the seeded model ids `grok-4.1`/`grok-4.1-fast` are
+  retired (confirmed via `docs.x.ai` and a live "model not found" response),
+  moved to `grok-4.6`/`grok-4.3`; and xAI's error body is a plain string
+  (`{"error": "..."}`), not OpenAI's nested `{"error":{"message"}}` shape.
 
 - Mobile device detection never persisted or audited a snapshot — fixed
   (`MobileRepository`, `mobile.detect` audit event, "Detection history" panel).

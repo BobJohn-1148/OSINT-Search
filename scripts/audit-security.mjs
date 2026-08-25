@@ -105,16 +105,16 @@ for (const required of ["maxItems", "flushMs", "flush()"]) {
 }
 
 const architectText = read(path.join(srcRoot, "main", "agents", "architect-agent-service.ts"));
-for (const required of ["confirmApply", "RepoReadTool", "providerResolver.resolve", "provider.ask", "provider.proposePlan", "agent.architect.apply.approved", "applyExecutor.apply", "auditRepository.record", "appendMemory"]) {
+for (const required of ["confirmApply", "RepoReadTool", "providerResolver.resolve", "provider.complete", "citedFiles.has", "agent.architect.apply.approved", "applyExecutor.apply", "auditRepository.record", "appendMemory"]) {
   if (!architectText.includes(required)) {
     fail(`architect agent service is missing ${required}`);
   }
 }
 
-const architectProviderText = read(path.join(srcRoot, "main", "agents", "architect-chat-provider.ts"));
-for (const required of ["ArchitectProviderResolver", "resolve(provider", "CodexArchitectProvider"]) {
-  if (!architectProviderText.includes(required)) {
-    fail(`architect chat provider is missing ${required}`);
+const chatProvidersText = read(path.join(srcRoot, "main", "providers", "chat-providers.ts"));
+for (const required of ["OllamaChatProvider", "AnthropicChatProvider", "XaiChatProvider", "UnavailableChatProvider", "ChatProviderResolver", "not wired to a real model call yet"]) {
+  if (!chatProvidersText.includes(required)) {
+    fail(`chat providers module is missing ${required}`);
   }
 }
 

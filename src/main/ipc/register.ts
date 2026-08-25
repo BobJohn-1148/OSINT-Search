@@ -185,7 +185,8 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
         ? await dialog.showMessageBox(focusedWindow, options)
         : await dialog.showMessageBox(options);
       return response.response === 0;
-    }
+    },
+    chatProviderResolver
   );
   const reportService = new ReportService(
     casesRepository,

@@ -15,8 +15,8 @@ import type { ArchitectAgentService } from "../../agents/architect-agent-service
 
 export function createArchitectAgentHandlers(architectAgentService: ArchitectAgentService) {
   return {
-    "agent:architect:ask": (request: ArchitectAskRequest): ArchitectAskResponse => architectAgentService.ask(request),
-    "agent:architect:proposePlan": (request: ArchitectProposePlanRequest): ArchitectProposePlanResponse =>
+    "agent:architect:ask": (request: ArchitectAskRequest): Promise<ArchitectAskResponse> => architectAgentService.ask(request),
+    "agent:architect:proposePlan": (request: ArchitectProposePlanRequest): Promise<ArchitectProposePlanResponse> =>
       architectAgentService.proposePlan(request),
     "agent:architect:apply": (request: ArchitectApplyRequest): Promise<ArchitectApplyResponse> =>
       architectAgentService.apply(request)

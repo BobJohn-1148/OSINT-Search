@@ -36,6 +36,14 @@ export interface ChatCompletionRequest {
   // The agent's stored reasoning_effort (migration 020), or null when unset.
   // Providers without an effort control ignore it rather than approximating one.
   readonly effort?: ReasoningEffort | null;
+  // Ollama's JSON mode forces every token to be valid JSON, which is why the
+  // small local model can follow agent-runtime-service.ts's strict schema at
+  // all -- but the same forcing makes a plain-prose request (architect-agent's
+  // ask()) come back as "{}", the shortest valid JSON, instead of an answer.
+  // Defaults to true so every pre-existing caller keeps the old behaviour;
+  // only a caller that wants prose sets this to false. Providers without a
+  // JSON-mode switch (Anthropic, xAI) ignore it, same as an unsupported effort.
+  readonly expectJson?: boolean;
 }
 
 export interface ChatCompletionResult {
@@ -77,7 +85,7 @@ export class OllamaChatProvider implements ChatProvider {
             { role: "user", content: request.userPrompt }
           ],
           stream: false,
-          format: "json"
+          ...(request.expectJson === false ? {} : { format: "json" })
         }),
         signal: controller.signal
       });

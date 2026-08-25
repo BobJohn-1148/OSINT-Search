@@ -30,6 +30,7 @@ import { migration023IosMobileToolCatalog } from "./023-ios-mobile-tool-catalog.
 import { migration024RevShellsLabToolCatalog } from "./024-revshells-lab-tool-catalog.js";
 import { migration025ScoutByteAgentDefaults } from "./025-scout-byte-agent-defaults.js";
 import { migration026RunnableAgentModels } from "./026-runnable-agent-models.js";
+import { migration027ArchitectAgentRunnableDefault } from "./027-architect-agent-runnable-default.js";
 
 export interface Migration {
   readonly id: number;
@@ -63,5 +64,6 @@ export const migrations: readonly Migration[] = [
   migration023IosMobileToolCatalog,
   migration024RevShellsLabToolCatalog,
   migration025ScoutByteAgentDefaults,
-  migration026RunnableAgentModels
+  migration026RunnableAgentModels,
+  migration027ArchitectAgentRunnableDefault
 ];

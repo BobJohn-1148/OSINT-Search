@@ -45,6 +45,38 @@ describe("OllamaChatProvider", () => {
     });
   });
 
+  it("omits format:json when the caller wants prose, so a plain-text prompt is not forced into an empty JSON object", async () => {
+    // Confirmed live: with format:"json" always sent, asking llama3.1:8b a
+    // plain-prose question ("no JSON, no markdown fences") returned the
+    // literal text "{}" -- the shortest string satisfying both the forced
+    // JSON grammar and a prompt telling it not to use JSON. architect-agent's
+    // ask() is the one caller that wants prose; everything else keeps JSON
+    // mode by leaving expectJson unset.
+    let capturedBody: unknown;
+    global.fetch = vi.fn((_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return Promise.resolve(new Response(JSON.stringify({ message: { role: "assistant", content: "a plain answer" } }), { status: 200 }));
+    }) as unknown as typeof fetch;
+    const provider = new OllamaChatProvider();
+
+    await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "llama3.1:8b", expectJson: false });
+
+    expect(capturedBody).not.toHaveProperty("format");
+  });
+
+  it("keeps format:json when expectJson is left unset, so agent-runtime-service.ts's existing JSON-mode callers are unaffected", async () => {
+    let capturedBody: unknown;
+    global.fetch = vi.fn((_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return Promise.resolve(new Response(JSON.stringify({ message: { role: "assistant", content: "{}" } }), { status: 200 }));
+    }) as unknown as typeof fetch;
+    const provider = new OllamaChatProvider();
+
+    await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "llama3.1:8b" });
+
+    expect(capturedBody).toMatchObject({ format: "json" });
+  });
+
   it("raises a clear error when Ollama's response has no message content", async () => {
     global.fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify({}), { status: 200 })));
     const provider = new OllamaChatProvider();
