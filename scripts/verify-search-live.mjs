@@ -6,7 +6,9 @@
  * "does OSINT search still actually work" can be re-checked after any change
  * to a connector or the orchestrator without needing the full Electron app.
  *
- * Usage: node scripts/verify-search-live.mjs
+ * Usage (run from the project root): npx tsx scripts/verify-search-live.mjs
+ * Plain `node` cannot run this file directly -- it imports .ts source files,
+ * which only tsx's loader knows how to resolve and transpile on the fly.
  */
 import { runSearch } from "../src/main/search/orchestrator.ts";
 import { searchConnectors } from "../src/main/search/connectors/index.js";
