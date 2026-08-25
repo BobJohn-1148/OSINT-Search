@@ -4,6 +4,14 @@ This file is the architect's memory for Reacher. It overrides default behaviour.
 Read it first, then `planning/REACHER_PLAN.md` (the phases) and
 `planning/API_CATALOG.md` (the data sources) before touching code.
 
+## Active branch
+
+Do all work on `working`, not `main`. `main` is frozen at its current pushed
+state on purpose (2026-08-24) — commit and push to `working` instead until
+Jack explicitly says to switch back to `main` or to merge `working` into it.
+`planning/BACKLOG.md` holds the standing list of outstanding work; read it
+alongside this file before starting a session.
+
 ## What Reacher is
 
 A personal, single-user Windows desktop app for one person (Jack) that unifies
