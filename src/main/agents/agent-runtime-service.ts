@@ -48,18 +48,49 @@ const CASE_CONTEXT_LIMIT = 20;
 // after it, so the prompt is capped rather than truncated mid-entry.
 const OBSERVATION_CONTEXT_LIMIT = 40;
 
+// A live llama3.1:8b run produced a syntactically valid but wrongly-shaped
+// "sources" value -- a single comma-joined string instead of a JSON array --
+// often enough (2 of 3 attempts on an IP seed with ~40 citation options) that
+// it was crashing schema validation outright and burning the one retry on a
+// mistake the grounding filter below would have caught for free anyway: a
+// comma-joined string can never exactly match a citation map key, so
+// normalizing it to a one-element array here still yields zero grounded
+// citations for that step, exactly as if the model had cited nothing. This
+// converts "the run fails" into "the run succeeds with fewer citations",
+// without loosening what counts as a valid citation at all.
+// A separate live run showed a model can also wrap an otherwise-correct key
+// in decorative formatting it copied from an earlier prompt iteration (e.g.
+// `KEY="observation:...:0"`, quotes and label included, as one array
+// entry) rather than the bare key. Stripping a leading label and any
+// surrounding quotes only ever removes formatting the citation map would
+// never contain -- it cannot turn a wrong key into a real one, so this can
+// only recover a citation, never fabricate a match.
+function cleanSourceToken(value: string): string {
+  return value
+    .trim()
+    .replace(/^key\s*=\s*/i, "")
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+const sourcesField = z
+  .union([z.array(z.string().min(1)), z.string().min(1)])
+  .optional()
+  .transform((value) => (Array.isArray(value) ? value : value ? [value] : []))
+  .transform((values) => values.map(cleanSourceToken).filter((value) => value.length > 0));
+
 const modelStepSchema = z.object({
   title: z.string().min(1),
   status: z.enum(["queued", "running", "complete", "error"]),
   summary: z.union([z.string().min(1), z.null()]).optional().transform((value) => value ?? null),
   next: z.union([z.string().min(1), z.null()]).optional().transform((value) => value ?? null),
-  sources: z.array(z.string().min(1)).default([])
+  sources: sourcesField
 });
 
 const modelFindingSchema = z.object({
   title: z.string().min(1),
   summary: z.string().min(1),
-  sources: z.array(z.string().min(1)).default([]),
+  sources: sourcesField,
   confidence: z.number().int().min(1)
 });
 
@@ -308,14 +339,25 @@ export class AgentRuntimeService {
 }
 
 function buildUserPrompt(seed: AgentSeed, citations: ReadonlyMap<string, string>): string {
-  const citationLines = [...citations.entries()].map(([key, description]) => `- ${key}: ${description}`).join("\n");
+  // Citation keys are themselves colon-delimited (observation:<runId>:<source>:<index>),
+  // and the description after them often contains its own colon too ("ipinfo
+  // reported hostname: one.one.one.one") -- "the part before the colon" was
+  // ambiguous the moment a key had more than one colon in it. A live
+  // llama3.1:8b run confirmed the failure mode, and confirmed a second one
+  // that a first attempt at fixing this introduced: labeling the key with
+  // `KEY="..."` got the model to copy the literal label text -- the string
+  // `KEY="observation:...:0"`, quotes and all -- into "sources", instead of
+  // treating "KEY=" as metadata to strip. "|" is a plain positional
+  // separator that never appears in a key or in this app's description text,
+  // so "everything before the |" needs no label to be unambiguous.
+  const citationLines = [...citations.entries()].map(([key, description]) => `- ${key} | ${description}`).join("\n");
   return [
     `Seed: ${seed.type} = ${seed.value}`,
     "",
-    'You may only cite the following sources. Use their exact key (the part before the colon) in every "sources" array -- never invent a source string:',
+    'Each line below is "KEY | description". Put ONLY the exact KEY text (everything before the " | ", no quotes added, nothing from after it) into every "sources" array entry -- never a source not listed here:',
     citationLines || "(no prior context -- this is the first thing known about this seed)",
     "",
-    "Respond with ONLY a JSON object, no prose and no markdown code fences, matching exactly this shape:",
+    "Respond with ONLY a JSON object, no prose and no markdown code fences, matching exactly this shape. \"sources\" is always a JSON array of KEY strings, even when there is only one:",
     '{"steps": [{"title": string, "status": "complete", "summary": string | null, "next": string | null, "sources": string[]}], "finding": {"title": string, "summary": string, "sources": string[], "confidence": integer >= 1}}'
   ].join("\n");
 }

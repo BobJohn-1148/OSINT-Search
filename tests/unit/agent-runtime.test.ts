@@ -66,7 +66,8 @@ class SeedCitingChatProvider implements ChatProvider {
   public readonly id: ProviderId = "ollama";
 
   public complete(request: ChatCompletionRequest): Promise<ChatCompletionResult> {
-    const seedKey = /- (seed:[^:]+:\S+):/.exec(request.userPrompt)?.[1] ?? "seed:unknown";
+    // Matches buildUserPrompt's "- <key> | <description>" citation line format.
+    const seedKey = /- (seed:\S+) \|/.exec(request.userPrompt)?.[1] ?? "seed:unknown";
     return Promise.resolve({ text: defaultModelResponse([seedKey]) });
   }
 }
@@ -384,4 +385,46 @@ it("accepts a JSON response wrapped in a markdown fence, which local models emit
 
   expect(provider.calls).toHaveLength(1);
   expect(result.finding.title).toBe("Provider-authored lead");
+});
+
+it("accepts a comma-joined sources string instead of a JSON array without retrying, since a real llama3.1:8b run sent exactly this shape", async () => {
+  // Real capture from a live IP-seed run: every step's "sources" was one
+  // string ("observation:x:0:desc, observation:x:1:desc, ...") instead of an
+  // array, which used to crash schema validation outright and burn the
+  // retry. It normalizes to a one-element array that the grounding filter
+  // then correctly drops (a comma-joined blob can never exactly equal a real
+  // key) -- this test is about not crashing on the shape, not about
+  // recovering citations from inside the blob.
+  const malformed = JSON.stringify({
+    steps: [{ title: "Step", status: "complete", summary: null, next: null, sources: "seed:username:jdoe, some other text" }],
+    finding: { title: "Lead", summary: "Summary", sources: ["seed:username:jdoe"], confidence: 2 }
+  });
+  const provider = new RecordingChatProvider("ollama", [malformed]);
+  const { runtimeRepository, service } = createRuntime(provider);
+
+  const result = await service.run({ agentId: "osint-agent", seed: { type: "username", value: "jdoe" } });
+
+  expect(provider.calls).toHaveLength(1);
+  expect(result.finding.title).toBe("Lead");
+  expect(runtimeRepository.listSteps(result.run.id)[0]?.sources).toEqual([]);
+});
+
+it("strips a KEY=\"...\" label a model copies from the prompt's citation list, recovering the real key underneath", async () => {
+  // Also a real capture: after the prompt started labeling each citation as
+  // KEY="...", one live response copied the label and quotes verbatim into
+  // "sources" instead of just the key. Stripping known wrapper syntax can
+  // only remove formatting a real citation key would never contain, so this
+  // recovers a citation without loosening what counts as a match.
+  const wrapped = JSON.stringify({
+    steps: [{ title: "Step", status: "complete", summary: null, next: null, sources: ['KEY="seed:username:jdoe"'] }],
+    finding: { title: "Lead", summary: "Summary", sources: ['KEY="seed:username:jdoe"'], confidence: 2 }
+  });
+  const provider = new RecordingChatProvider("ollama", [wrapped]);
+  const { runtimeRepository, service } = createRuntime(provider);
+
+  const result = await service.run({ agentId: "osint-agent", seed: { type: "username", value: "jdoe" } });
+
+  expect(provider.calls).toHaveLength(1);
+  expect(result.finding.sources).toEqual(["seed:username:jdoe"]);
+  expect(runtimeRepository.listSteps(result.run.id)[0]?.sources).toEqual(["seed:username:jdoe"]);
 });
