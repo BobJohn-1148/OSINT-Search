@@ -9,12 +9,16 @@
  * providers not wired yet, so a misconfigured agent cannot silently keep
  * producing template output that looks like real reasoning.
  *
- * Two providers are real: Ollama (local, free, no key) and Anthropic (hosted,
- * keyed). Anthropic is here because Jack deliberately put ripper-agent on it;
- * migrating that choice away would have been easier than honouring it, and
- * wrong. Its key arrives through an injected resolver rather than ambient
- * environment so the read stays behind the audited vault gate, the same rule the
- * ScrapeGraph connector follows.
+ * Three providers are real: Ollama (local, free, no key), Anthropic (hosted,
+ * keyed), and xAI (hosted, keyed). Anthropic is here because Jack deliberately
+ * put ripper-agent on it; migrating that choice away would have been easier
+ * than honouring it, and wrong. xAI uses its OpenAI-compatible REST endpoint
+ * directly rather than a proxy service (a "free unlimited Grok API" tutorial
+ * Jack found routed every call through a third party's own servers first --
+ * the opposite of every other provider here, which all call their vendor
+ * directly). Both keyed providers' keys arrive through an injected resolver
+ * rather than ambient environment so the read stays behind the audited vault
+ * gate, the same rule the ScrapeGraph connector follows.
  *
  * Reasoning effort is passed to every provider and honoured by the ones that
  * have such a control. Ollama has none, so it ignores the field -- which is what
@@ -162,6 +166,104 @@ export class AnthropicChatProvider implements ChatProvider {
   }
 }
 
+const XAI_TIMEOUT_MS = 120_000;
+const XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions";
+
+export class XaiChatProvider implements ChatProvider {
+  public readonly id: ProviderId = "xai";
+
+  public constructor(private readonly resolveKey: () => string | null) {}
+
+  public async complete(request: ChatCompletionRequest): Promise<ChatCompletionResult> {
+    const apiKey = this.resolveKey();
+    if (!apiKey) {
+      throw new Error("No xAI key is stored. Add one in Settings -> API keys, or switch this agent to Ollama.");
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), XAI_TIMEOUT_MS);
+    try {
+      // xAI's chat endpoint is OpenAI-compatible, so this reuses the same
+      // fetchJson/HttpLookupError plumbing every keyless connector already
+      // uses instead of pulling in a dedicated SDK for one provider.
+      const response = await fetchJson(XAI_CHAT_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: request.model,
+          messages: [
+            { role: "system", content: request.systemPrompt },
+            { role: "user", content: request.userPrompt }
+          ],
+          ...(xaiEffort(request.effort) ? { reasoning_effort: xaiEffort(request.effort) } : {})
+        }),
+        signal: controller.signal
+      });
+
+      const choices = asRecord(response).choices;
+      const firstChoice = Array.isArray(choices) ? asRecord(choices[0]) : {};
+      const content = asRecord(firstChoice.message).content;
+      if (typeof content !== "string" || content.length === 0) {
+        const finishReason = typeof firstChoice.finish_reason === "string" ? firstChoice.finish_reason : "unknown";
+        throw new Error(`xAI returned no text content (finish reason: ${finishReason})`);
+      }
+      return { text: content };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(`xAI did not respond within ${XAI_TIMEOUT_MS / 1000}s (model: ${request.model})`, { cause: error });
+      }
+      if (error instanceof HttpLookupError) {
+        throw describeXaiError(error, request.model);
+      }
+      throw error instanceof Error ? error : new Error(String(error));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+/** xAI's reasoning_effort ladder is two rungs (low|high); other stored values fall through unset rather than guessing. */
+function xaiEffort(effort: ReasoningEffort | null | undefined): "low" | "high" | null {
+  return effort === "low" || effort === "high" ? effort : null;
+}
+
+/**
+ * Confirmed live against the real endpoint (unauthenticated, no key needed to
+ * see this): xAI's error body is `{"error": "plain string", "code": "..."}`,
+ * not OpenAI's nested `{"error": {"message": "..."}}` despite the rest of the
+ * API being OpenAI-compatible. Both shapes are handled since a differently
+ * classified error could still come back nested.
+ */
+function xaiErrorMessage(body: string): string | null {
+  try {
+    const error: unknown = asRecord(JSON.parse(body)).error;
+    if (typeof error === "string" && error.length > 0) {
+      return error;
+    }
+    const nestedMessage = asRecord(error).message;
+    return typeof nestedMessage === "string" && nestedMessage.length > 0 ? nestedMessage : null;
+  } catch {
+    return null;
+  }
+}
+
+function describeXaiError(error: HttpLookupError, model: string): Error {
+  if (error.status === 401) {
+    return new Error("The stored xAI key was rejected. Replace it in Settings -> API keys.", { cause: error });
+  }
+  if (error.status === 404) {
+    return new Error(`xAI does not recognize the model "${model}". Pick another one in Settings.`, { cause: error });
+  }
+  if (error.status === 429) {
+    return new Error("xAI rate-limited this run. Wait a moment and re-run the agent.", { cause: error });
+  }
+  const reported = xaiErrorMessage(error.body);
+  return new Error(
+    reported ? `xAI returned an error: ${reported} (model: ${model})` : `xAI returned HTTP ${error.status} for model ${model}`,
+    { cause: error }
+  );
+}
+
 export class UnavailableChatProvider implements ChatProvider {
   public constructor(public readonly id: ProviderId) {}
 
@@ -181,8 +283,8 @@ export function defaultChatProviders(resolveSecret: SecretResolver): readonly Ch
   return [
     new OllamaChatProvider(),
     new AnthropicChatProvider(() => resolveSecret("anthropic", "agent.anthropic")),
+    new XaiChatProvider(() => resolveSecret("xai", "agent.xai")),
     new UnavailableChatProvider("openai"),
-    new UnavailableChatProvider("xai"),
     new UnavailableChatProvider("lm-studio")
   ];
 }

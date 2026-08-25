@@ -157,11 +157,11 @@ it("invokes the switched architect provider so Settings changes affect Codex cal
     process.cwd(),
     new ArchitectProviderResolver([new RecordingArchitectProvider(), xaiProvider])
   );
-  agentsRepository.setModel("architect-agent", "xai", "grok-4.1");
+  agentsRepository.setModel("architect-agent", "xai", "grok-4.6");
 
   service.ask({ question: "Which provider handles this?", files: ["src/shared/ipc.ts"] });
 
-  expect(xaiProvider.calls[0]).toMatchObject({ provider: "xai", model: "grok-4.1" });
+  expect(xaiProvider.calls[0]).toMatchObject({ provider: "xai", model: "grok-4.6" });
 });
 
 it("uses shared memory so architect plans persist across agents and providers", async () => {

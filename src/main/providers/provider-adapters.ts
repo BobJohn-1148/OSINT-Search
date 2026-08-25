@@ -103,8 +103,14 @@ const anthropicModels = [
 export const providerAdapters: readonly ProviderAdapter[] = [
   // OpenAI reasoning models expose the full minimal|low|medium|high effort ladder.
   externalProvider("openai", "OpenAI", "openai", "gpt-5.6-terra", openAiModels, "sk-", ["minimal", "low", "medium", "high"]),
-  // xAI Grok's reasoning effort is a two-rung low|high control.
-  externalProvider("xai", "xAI Grok", "xai", "grok-4.1", ["grok-4.1", "grok-4.1-fast"], "xai-", ["low", "high"]),
+  // xAI Grok's reasoning effort is a two-rung low|high control. grok-4.1 and
+  // grok-4.1-fast (the previous IDs here) were confirmed retired live against
+  // the real endpoint -- an unauthenticated call for either returns a
+  // "Model not found" 400 before any credential check even runs, while
+  // grok-4.6/grok-4.3 both pass that same check and fall through to a 401.
+  // xAI's own docs (docs.x.ai/developers/models) list grok-4.6 as current
+  // flagship and grok-4.3 as the previous still-active one.
+  externalProvider("xai", "xAI Grok", "xai", "grok-4.6", ["grok-4.6", "grok-4.3"], "xai-", ["low", "high"]),
   // Anthropic extended thinking is expressed here as low|medium|high thinking budget.
   externalProvider("anthropic", "Anthropic", "anthropic", "claude-sonnet-5", anthropicModels, "sk-ant-", ["low", "medium", "high"]),
   // llama3.1:8b is the default because it fits entirely in an 8GB card and is

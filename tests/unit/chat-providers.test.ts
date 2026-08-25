@@ -9,7 +9,8 @@ import {
   ChatProviderResolver,
   defaultChatProviders,
   OllamaChatProvider,
-  UnavailableChatProvider
+  UnavailableChatProvider,
+  XaiChatProvider
 } from "../../src/main/providers/chat-providers";
 
 describe("OllamaChatProvider", () => {
@@ -195,11 +196,120 @@ describe("AnthropicChatProvider", () => {
   });
 });
 
+describe("XaiChatProvider", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("posts to xAI's OpenAI-compatible chat endpoint with a bearer token and the system/user prompts", async () => {
+    let capturedUrl: string | undefined;
+    let capturedInit: RequestInit | undefined;
+    global.fetch = vi.fn((url: string, init?: RequestInit) => {
+      capturedUrl = url;
+      capturedInit = init;
+      return Promise.resolve(
+        new Response(JSON.stringify({ choices: [{ message: { content: "hello" }, finish_reason: "stop" }] }), { status: 200 })
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = new XaiChatProvider(() => "xai-test-key");
+    const result = await provider.complete({ systemPrompt: "You are Scout.", userPrompt: "Investigate jdoe.", model: "grok-4.6" });
+
+    expect(result.text).toBe("hello");
+    expect(capturedUrl).toBe("https://api.x.ai/v1/chat/completions");
+    expect(new Headers(capturedInit?.headers).get("authorization")).toBe("Bearer xai-test-key");
+    expect(JSON.parse(capturedInit?.body as string)).toMatchObject({
+      model: "grok-4.6",
+      messages: [
+        { role: "system", content: "You are Scout." },
+        { role: "user", content: "Investigate jdoe." }
+      ]
+    });
+  });
+
+  it("forwards a low|high reasoning effort but omits the field entirely for an unsupported rung", async () => {
+    let capturedBody: unknown;
+    global.fetch = vi.fn((_url: string, init?: RequestInit) => {
+      capturedBody = JSON.parse(init?.body as string);
+      return Promise.resolve(new Response(JSON.stringify({ choices: [{ message: { content: "ok" } }] }), { status: 200 }));
+    }) as unknown as typeof fetch;
+    const provider = new XaiChatProvider(() => "xai-test-key");
+
+    await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6", effort: "high" });
+    expect(capturedBody).toMatchObject({ reasoning_effort: "high" });
+
+    await provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6", effort: "medium" });
+    expect(capturedBody).not.toHaveProperty("reasoning_effort");
+  });
+
+  it("points at Settings when no key is stored, instead of failing with an authorization error", async () => {
+    const provider = new XaiChatProvider(() => null);
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(
+      /No xAI key is stored.*Settings/
+    );
+  });
+
+  it("raises a clear error when xAI's response has no message content", async () => {
+    global.fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ choices: [] }), { status: 200 })));
+    const provider = new XaiChatProvider(() => "xai-test-key");
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(
+      /xAI returned no text content/
+    );
+  });
+
+  it("reports a rejected key distinctly from a bad model or a rate limit, each pointing at what to do about it", async () => {
+    const provider = new XaiChatProvider(() => "xai-bad-key");
+
+    global.fetch = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ error: { message: "Incorrect API key provided" } }), { status: 401 }))
+    );
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(
+      /stored xAI key was rejected.*Settings/
+    );
+
+    global.fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: { message: "model not found" } }), { status: 404 })));
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-9000" })).rejects.toThrow(
+      /does not recognize the model "grok-9000"/
+    );
+
+    global.fetch = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ error: { message: "rate limited" } }), { status: 429 })));
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(/rate-limited this run/);
+  });
+
+  it("parses xAI's real error body shape -- a plain string, not OpenAI's nested {message} -- captured live from the actual endpoint", async () => {
+    // curl -X POST https://api.x.ai/v1/chat/completions -d '{"model":"grok-4.1",...}'
+    // returned exactly this body with a 400, unauthenticated. The rest of the
+    // API is documented as OpenAI-compatible, but this specific shape is not.
+    global.fetch = vi.fn(() =>
+      Promise.resolve(new Response(JSON.stringify({ code: "invalid-argument", error: "Model not found: grok-4.1" }), { status: 400 }))
+    );
+    const provider = new XaiChatProvider(() => "xai-test-key");
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.1" })).rejects.toThrow(
+      /xAI returned an error: Model not found: grok-4\.1/
+    );
+  });
+
+  it("falls back to a plain status message when a non-2xx response body isn't xAI's usual error shape", async () => {
+    global.fetch = vi.fn(() => Promise.resolve(new Response("Bad Gateway", { status: 502 })));
+    const provider = new XaiChatProvider(() => "xai-test-key");
+
+    await expect(provider.complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(
+      /xAI returned HTTP 502 for model grok-4\.6/
+    );
+  });
+});
+
 describe("ChatProviderResolver", () => {
-  it("resolves ollama and anthropic to real providers and unwired ones to UnavailableChatProvider by default", () => {
+  it("resolves ollama, anthropic, and xai to real providers and unwired ones to UnavailableChatProvider by default", () => {
     const resolver = new ChatProviderResolver();
     expect(resolver.resolve("ollama")).toBeInstanceOf(OllamaChatProvider);
     expect(resolver.resolve("anthropic")).toBeInstanceOf(AnthropicChatProvider);
+    expect(resolver.resolve("xai")).toBeInstanceOf(XaiChatProvider);
     expect(resolver.resolve("openai")).toBeInstanceOf(UnavailableChatProvider);
   });
 
@@ -216,6 +326,21 @@ describe("ChatProviderResolver", () => {
       resolver.resolve("anthropic").complete({ systemPrompt: "s", userPrompt: "u", model: "claude-sonnet-5" })
     ).rejects.toThrow(/No Anthropic key is stored/);
     expect(reads).toEqual([["anthropic", "agent.anthropic"]]);
+  });
+
+  it("reads the xAI key through the injected vault resolver, never from ambient environment", async () => {
+    const reads: [string, string][] = [];
+    const resolver = new ChatProviderResolver(
+      defaultChatProviders((source, purpose) => {
+        reads.push([source, purpose]);
+        return null;
+      })
+    );
+
+    await expect(resolver.resolve("xai").complete({ systemPrompt: "s", userPrompt: "u", model: "grok-4.6" })).rejects.toThrow(
+      /No xAI key is stored/
+    );
+    expect(reads).toEqual([["xai", "agent.xai"]]);
   });
 
   it("throws for a provider id that was never registered", () => {
