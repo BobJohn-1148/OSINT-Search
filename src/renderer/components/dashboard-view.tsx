@@ -11,7 +11,7 @@
  */
 import { Bot, ExternalLink, Eye, Globe, Mail, Phone, Plus, RefreshCw, Search, ShieldAlert, Trash2, User } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentLiveState, AgentRunRecord } from "../../shared/schemas/agents-runtime";
 import type { DashboardSummaryResponse } from "../../shared/schemas/dashboard";
 import type { CaseRecord } from "../../shared/schemas/cases";
@@ -33,6 +33,32 @@ export function DashboardView() {
   const [status, setStatus] = useState("Monitoring ready");
   const [loadingLabel, setLoadingLabel] = useState("Loading dashboard");
   const [reachability, setReachability] = useState<Record<string, boolean | null>>({});
+  const statusResetTimer = useRef<number | null>(null);
+
+  // A failed action's message (e.g. "Watch <id> does not exist" from a stale
+  // client-side reference) otherwise sits in this banner forever -- nothing
+  // ever clears it, so if the window is just left open on this route without
+  // triggering another action, an error from hours ago keeps reading as a
+  // live, current problem. Auto-clearing back to the neutral message after a
+  // pause keeps the banner honest about what's actually happening right now.
+  const announceStatus = useCallback((message: string): void => {
+    setStatus(message);
+    if (statusResetTimer.current !== null) {
+      window.clearTimeout(statusResetTimer.current);
+    }
+    statusResetTimer.current = window.setTimeout(() => {
+      setStatus("Monitoring ready");
+      statusResetTimer.current = null;
+    }, 12000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (statusResetTimer.current !== null) {
+        window.clearTimeout(statusResetTimer.current);
+      }
+    };
+  }, []);
 
   /**
    * Fired without awaiting so a slow or unreachable site never delays the
@@ -96,25 +122,25 @@ export function DashboardView() {
       checkIntervalMinutes: 60
     });
     if (!result.ok) {
-      setStatus(result.error.message);
+      announceStatus(result.error.message);
       setLoadingLabel("");
       return;
     }
-    setStatus(`Watching ${result.value.watch.value}`);
+    announceStatus(`Watching ${result.value.watch.value}`);
     setShowWatchForm(false);
     await refresh();
   }
 
   async function checkNow(watch: WatchRecord) {
     setLoadingLabel(`Checking ${watch.value}`);
-    setStatus(`Checking ${watch.value}`);
+    announceStatus(`Checking ${watch.value}`);
     const result = await invoke("watch:checkNow", { watchId: watch.id, caseId: (watch.caseId ?? caseId) || undefined });
     if (!result.ok) {
-      setStatus(result.error.message);
+      announceStatus(result.error.message);
       setLoadingLabel("");
       return;
     }
-    setStatus(
+    announceStatus(
       result.value.newExposures.length > 0
         ? `${result.value.newExposures.length} new exposures saved:${result.value.savedItems}`
         : `No new exposures; skipped:${result.value.skippedSources.length}`
@@ -125,7 +151,7 @@ export function DashboardView() {
   async function removeWatch(watch: WatchRecord) {
     setLoadingLabel(`Removing ${watch.value}`);
     const result = await invoke("watch:remove", { watchId: watch.id });
-    setStatus(result.ok && result.value.removed ? "Watch removed" : "Watch was not removed");
+    announceStatus(result.ok && result.value.removed ? "Watch removed" : "Watch was not removed");
     await refresh();
   }
 

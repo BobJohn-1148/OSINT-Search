@@ -1429,6 +1429,80 @@ it("dashboard adds a watch target and checks exposure alerts so credential monit
   expect(await screen.findByText("1 new exposures saved:1")).toBeInTheDocument();
 });
 
+it("clears a failed watch action's error banner after a pause, instead of leaving it looking like a live problem forever", async () => {
+  // shouldAdvanceTime keeps real wall-clock time ticking alongside the faked
+  // clock, so Testing Library's own findBy*/waitFor polling (which relies on
+  // real timers internally) does not hang forever waiting for a tick that
+  // vi.advanceTimersByTime never actually produces on its own.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "dashboard:summary") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          activeCases: [],
+          recentSearches: [],
+          recentAgentRuns: [],
+          agentStatus: { working: 0, idle: 0, offline: 0, error: 0, states: [] },
+          watchAlerts: [],
+          recentAudit: []
+        }
+      });
+    }
+    if (channel === "cases:list") {
+      return Promise.resolve({ ok: true as const, value: { cases: [] } });
+    }
+    if (channel === "watch:list") {
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          watches: [
+            {
+              id: "watch-stale",
+              type: "email",
+              value: "security@example.com",
+              caseId: null,
+              checkIntervalMinutes: 60,
+              createdTs: "2026-08-10T10:00:00.000Z",
+              lastCheckedTs: null
+            }
+          ],
+          alerts: []
+        }
+      });
+    }
+    if (channel === "watch:exposures") {
+      return Promise.resolve({ ok: true as const, value: { exposures: [] } });
+    }
+    // The real bug: this is what checkNow returns for a watch id that no
+    // longer exists in the repository (monitoring-service.ts's own
+    // `Watch ${id} does not exist` error), surfaced verbatim as the status
+    // banner's text.
+    if (channel === "watch:checkNow") {
+      return Promise.resolve({ ok: false as const, error: { code: "not-found", message: "Watch watch-stale does not exist" } });
+    }
+    return Promise.resolve({ ok: true as const, value: {} });
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/"]}>
+      <AppFrame />
+    </MemoryRouter>
+  );
+
+  await user.click(await screen.findByRole("button", { name: "Check now" }));
+  expect(await screen.findByText("Watch watch-stale does not exist")).toBeInTheDocument();
+
+  act(() => {
+    vi.advanceTimersByTime(12000);
+  });
+
+  expect(screen.queryByText("Watch watch-stale does not exist")).not.toBeInTheDocument();
+  expect(screen.getByText("Monitoring ready")).toBeInTheDocument();
+  vi.useRealTimers();
+});
+
 it("search attach-image icon picks a file and reverse-searches it in one action", async () => {
   const user = userEvent.setup();
 

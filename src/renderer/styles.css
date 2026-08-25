@@ -396,6 +396,15 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 36px;
 }
 
+/* The base row assumes the trailing slot is exactly one 36px icon button.
+   "-wide" is used everywhere a header carries more than that (a labeled
+   button, several icons) -- without a real rule here, it silently fell back
+   to the 36px column and crammed that content into it, forcing text like
+   "Add watch" to wrap onto two lines instead of sitting on one. */
+.section-title-row-wide {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .section-title {
   margin: 0;
   font-size: 18px;
