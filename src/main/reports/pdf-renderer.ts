@@ -3,7 +3,20 @@
  * compare bytes for the same evidence bundle. If PDFKit were allowed to choose
  * timestamps or traversal order, investigators could not distinguish real report
  * changes from renderer noise.
+ *
+ * PDFKit's built-in Helvetica is a Standard-14 font restricted to WinAnsi
+ * (Latin-1) encoding -- any character outside that range (Cyrillic, Greek,
+ * Vietnamese diacritics) was silently dropped from the page rather than
+ * raising an error. Dynamic report content -- titles, finding text, citation
+ * labels -- switches to an embedded Noto Sans (which covers those scripts)
+ * whenever it contains such a character; static, app-authored labels stay on
+ * Helvetica so the common all-English report is visually unchanged. Noto Sans
+ * ships as a single variable-font file with no bold instance reachable through
+ * pdfkit's registerFont, so text that would have been Helvetica-Bold renders
+ * in the same regular weight when the fallback is engaged -- a disclosed
+ * trade-off, not a silent one: nothing is dropped, which is the actual bug.
  */
+import path from "node:path";
 import PDFDocument from "pdfkit";
 import type { ReportDocumentModel, ReportFinding, ReportSection } from "./report-model.js";
 import type { ReportRenderer } from "./report-renderer.js";
@@ -12,6 +25,14 @@ const FIXED_PDF_DATE = new Date("2000-01-01T00:00:00.000Z");
 const PAGE_MARGIN = 54;
 const BODY_WIDTH = 504;
 const REQUIRED_SECTION_ORDER = ["Scans and topology", "Host list"] as const;
+const UNICODE_FALLBACK_FONT = "NotoSans";
+const UNICODE_FALLBACK_FONT_PATH = "assets/fonts/NotoSans-Variable.ttf";
+// Matches any character outside the printable Latin-1 range (space through
+// 0xFF) that Helvetica's WinAnsi encoding can represent. Starts at space
+// (0x20), not 0x00, so the class excludes control characters and satisfies
+// eslint's no-control-regex; written as hex escapes, not a literal high
+// character, since this file is parsed as ASCII-safe source.
+const NON_LATIN1_PATTERN = /[^\x20-\xFF]/;
 
 const pdfTheme = {
   page: [255, 255, 255] as [number, number, number],
@@ -23,20 +44,18 @@ const pdfTheme = {
 } as const satisfies Record<string, PDFKit.Mixins.ColorValue>;
 
 export class PdfReportRenderer implements ReportRenderer {
+  public constructor(private readonly appRoot: string) {}
+
   public async render(model: ReportDocumentModel): Promise<Buffer> {
-    return renderToBuffer(model);
+    return renderToBuffer(model, this.appRoot);
   }
 }
 
-export function createPdfRenderer(): ReportRenderer {
-  return new PdfReportRenderer();
+export function createPdfRenderer(appRoot: string): ReportRenderer {
+  return new PdfReportRenderer(appRoot);
 }
 
-export async function renderPdfReport(model: ReportDocumentModel): Promise<Buffer> {
-  return renderToBuffer(model);
-}
-
-async function renderToBuffer(model: ReportDocumentModel): Promise<Buffer> {
+async function renderToBuffer(model: ReportDocumentModel, appRoot: string): Promise<Buffer> {
   const document = new PDFDocument({
     autoFirstPage: true,
     bufferPages: true,
@@ -54,6 +73,7 @@ async function renderToBuffer(model: ReportDocumentModel): Promise<Buffer> {
       ModDate: FIXED_PDF_DATE
     }
   });
+  document.registerFont(UNICODE_FALLBACK_FONT, path.join(appRoot, UNICODE_FALLBACK_FONT_PATH));
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const finished = onceFinished(document);
@@ -70,6 +90,15 @@ async function renderToBuffer(model: ReportDocumentModel): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
+/**
+ * Picks the fallback font the instant dynamic text carries a character
+ * Helvetica cannot encode, so investigator-entered or source-provided content
+ * (usernames, addresses, page titles) never silently loses characters.
+ */
+function bodyFont(text: string, bold: boolean): string {
+  return NON_LATIN1_PATTERN.test(text) ? UNICODE_FALLBACK_FONT : bold ? "Helvetica-Bold" : "Helvetica";
+}
+
 function renderTitleBlock(document: PDFKit.PDFDocument, model: ReportDocumentModel): void {
   document
     .fillColor(pdfTheme.accent)
@@ -77,9 +106,9 @@ function renderTitleBlock(document: PDFKit.PDFDocument, model: ReportDocumentMod
     .fontSize(10)
     .text("Reacher report", { characterSpacing: 0.4 });
   document.moveDown(0.6);
-  document.fillColor(pdfTheme.ink).fontSize(22).text(model.title, { width: BODY_WIDTH });
+  document.fillColor(pdfTheme.ink).font(bodyFont(model.title, false)).fontSize(22).text(model.title, { width: BODY_WIDTH });
   document.moveDown(0.35);
-  document.fillColor(pdfTheme.muted).font("Helvetica").fontSize(11).text(model.subtitle, { width: BODY_WIDTH });
+  document.fillColor(pdfTheme.muted).font(bodyFont(model.subtitle, false)).fontSize(11).text(model.subtitle, { width: BODY_WIDTH });
   document.moveDown(0.2);
   document.text(`Generated ${model.generatedTs}`, { width: BODY_WIDTH });
   document.moveDown(1.2);
@@ -106,7 +135,7 @@ function renderFindings(document: PDFKit.PDFDocument, findings: readonly ReportF
     ensureSpace(document, 92);
     const citations = orderedCitations(finding.citations).map((citation) => `[${citation.id}] ${citation.label}`);
     document
-      .font("Helvetica-Bold")
+      .font(bodyFont(finding.title, true))
       .fontSize(12)
       .fillColor(pdfTheme.ink)
       .text(finding.title, { width: BODY_WIDTH });
@@ -116,13 +145,14 @@ function renderFindings(document: PDFKit.PDFDocument, findings: readonly ReportF
       .fillColor(pdfTheme.muted)
       .text(`${finding.itemType} | ${finding.sourceTs}`, { width: BODY_WIDTH });
     document.moveDown(0.25);
-    document.fontSize(10).fillColor(pdfTheme.ink).text(finding.text, { width: BODY_WIDTH, lineGap: 2 });
+    document.font(bodyFont(finding.text, false)).fontSize(10).fillColor(pdfTheme.ink).text(finding.text, { width: BODY_WIDTH, lineGap: 2 });
     document.moveDown(0.25);
+    const citationsLine = `Citations: ${citations.length > 0 ? citations.join("; ") : "No citation label"}`;
     document
-      .font("Helvetica-Bold")
+      .font(bodyFont(citationsLine, true))
       .fontSize(9)
       .fillColor(pdfTheme.accent)
-      .text(`Citations: ${citations.length > 0 ? citations.join("; ") : "No citation label"}`, { width: BODY_WIDTH });
+      .text(citationsLine, { width: BODY_WIDTH });
     document.moveDown(0.75);
   }
 }
@@ -145,7 +175,7 @@ function renderSectionHeading(document: PDFKit.PDFDocument, title: string): void
     .fill(pdfTheme.accentSurface);
   document
     .fillColor(pdfTheme.accent)
-    .font("Helvetica-Bold")
+    .font(bodyFont(title, true))
     .fontSize(12)
     .text(title, PAGE_MARGIN + 10, document.y + 6, { width: BODY_WIDTH - 20 });
   document.y += 14;
@@ -158,14 +188,14 @@ function renderBullet(document: PDFKit.PDFDocument, text: string): void {
   document.circle(PAGE_MARGIN + 4, bulletY, 2).fill(pdfTheme.accent);
   document
     .fillColor(pdfTheme.ink)
-    .font("Helvetica")
+    .font(bodyFont(text, false))
     .fontSize(10)
     .text(text, PAGE_MARGIN + 16, document.y, { width: BODY_WIDTH - 16, lineGap: 2 });
   document.moveDown(0.35);
 }
 
 function renderBodyLine(document: PDFKit.PDFDocument, text: string): void {
-  document.fillColor(pdfTheme.ink).font("Helvetica").fontSize(10).text(text, { width: BODY_WIDTH, lineGap: 2 });
+  document.fillColor(pdfTheme.ink).font(bodyFont(text, false)).fontSize(10).text(text, { width: BODY_WIDTH, lineGap: 2 });
 }
 
 function renderPageFooters(document: PDFKit.PDFDocument): void {

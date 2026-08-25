@@ -192,7 +192,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     reportsRepository,
     auditRepository,
     scansRepository,
-    { pdf: createPdfRenderer(), docx: createDocxRenderer() },
+    { pdf: createPdfRenderer(app.getAppPath()), docx: createDocxRenderer() },
     path.join(app.getPath("userData"), "reports")
   );
   // The process-backed connectors cannot live in the static registry: Sherlock

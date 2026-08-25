@@ -19,3 +19,4 @@ release/
 token.txt
 graphify-out/
 .agents/
+.cache/
