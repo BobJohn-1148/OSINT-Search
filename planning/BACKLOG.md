@@ -10,62 +10,30 @@ on purpose. Commit and push to `working` until Jack says otherwise.
 
 ## Open bugs (reported, real, not yet fixed)
 
-### "Watch `<uuid>` does not exist" error banner on the Dashboard watchlist card
-Recurring — an earlier pass this session closed this out as "a one-time
-stale-state artifact," but it showed up again unprompted, so that conclusion
-was wrong. Needs a real look at `src/renderer/components/dashboard-view.tsx`'s
-watchlist section and `src/main/monitoring/monitoring-service.ts` /
-`src/db/repositories/monitoring-repository.ts` for wherever a stale
-`watchId` can outlive the row it points at (e.g. renderer state holding an id
-from a deleted/recreated watch, or a race between delete and a pending
-check-now call).
-
-### Floating "+ Add watch" button in the Watchlist panel header
-Distinct from the already-shipped fix (commit `68648cf`, confirmed present in
-`working`'s history) that fixed the *in-form* Add-watch button's position.
-This is a different problem: the "+ Add watch" control in the panel's
-top-right header wraps awkwardly onto two lines ("Add" / "watch") instead of
-staying on one line. CSS layout issue in the Watchlist card header, likely in
-`src/renderer/components/dashboard-view.tsx` + `src/renderer/styles.css`.
-
-### Citation-integrity rejection on IP-seed agent runs
-Real error seen live: `OSINT agent's model response did not cite anything
-present in the context it was given ... after one retry`, on an IP seed
-(1.1.1.1) run through `llama3.1:8b`. The citation-integrity gate did its job
-correctly (rejecting an ungrounded response is the intended behavior), but it
-isn't yet established whether this is inherent small-model inconsistency
-(acceptable, no code change) or a real formatting bug specific to how
-IP-type observations get turned into citation keys in
-`src/main/agents/agent-runtime-service.ts` (`buildUserPrompt`). A same-seed
-domain-type run (cloudflare.com) succeeded end-to-end in the same session, so
-this may be seed-type-specific. Needs a live repro (re-run the same IP seed
-a few times, inspect what the model actually returned) before deciding
-whether it's a code fix or just expected model variance.
-
-### "database disk image is malformed" (live app, one occurrence)
-Investigated: `PRAGMA integrity_check` against the live
-`%APPDATA%\reacher\reacher.sqlite` came back clean (`ok`), only one Electron
-process was running (no second instance fighting over the file), and the
-folder isn't OneDrive-synced. Most likely a transient WAL/connection hiccup,
-not real corruption. Jack was asked to fully quit and relaunch the app and
-retry the action that triggered it (Save watch). **If it recurs after a
-clean restart, this needs real investigation** into the app's SQLite
-connection setup (`src/db/database.ts`) — busy_timeout, WAL checkpoint
-behavior, whether anything else briefly opens a second connection to the
-same file.
+### "Watch `<uuid>` does not exist" — root cause was staleness, not a live re-firing bug
+Turned out not to be what it looked like: `dashboard-view.tsx`'s `status`
+banner was a one-shot React state with no auto-clear, so a failed action's
+error message from hours earlier just sat there indefinitely if the Electron
+window stayed open on the Dashboard route without triggering another action —
+reading as a live problem long after the actual watch-id mismatch that
+caused it. Fixed with `announceStatus()`, which clears the banner back to
+"Monitoring ready" after 12s. The underlying `Watch ${id} does not exist`
+condition itself (`monitoring-service.ts`'s `checkNow`) is a real, correct
+guard against a stale client-side watch reference — not itself a bug.
 
 ## Needs a product decision, not a fix
 
-### "Remove the observations, show the actual data" — scope unclear
-Built `scripts/verify-search-live.mjs` (a standing dev script, already
-committed) that prints full raw data from a live search run outside the app.
-Not touched: the app's own Search page still shows an "X observations: Y
-sources returned / Z failed" summary line
-(`src/renderer/components/search-view.tsx` ~line 452, and a similar line
-~676). If Jack meant the in-app wording too, say so specifically and it's a
-quick copy/layout change.
+### "Remove the observations, show the actual data" — scope still unclear
+Built `scripts/verify-search-live.mjs` (a standing dev script, committed)
+that prints full raw data from a live search run outside the app. Not
+touched: the app's own Search page still shows an "X observations: Y sources
+returned / Z failed" summary line (`src/renderer/components/search-view.tsx`
+~line 452, and a similar line ~676). Deliberately left alone rather than
+guessed at, since changing app-facing copy on a guess risks doing the wrong
+thing. If Jack meant the in-app wording too, say so specifically and it's a
+quick copy change.
 
-### xAI Grok via puter.com — recommended against
+### xAI Grok via puter.com — recommended against, real alternative offered
 `https://developer.puter.com/tutorials/free-unlimited-grok-api/` routes
 requests through Puter's own servers (not local-first), is a browser-side
 library (`puter.js`, wrong runtime for the main-process `ChatProvider`
@@ -75,14 +43,17 @@ xAI's own API directly — same pattern as `AnthropicChatProvider` in
 `src/main/providers/chat-providers.ts` (API key in the vault, direct HTTPS
 call, no proxy). Not built yet; needs a go-ahead.
 
-## Not started
+## Discovered, not yet actioned
 
-### Dead code / unnecessary lines sweep
-Jack asked for a pass over the codebase to find and delete dead weight —
-unused exports, functions nothing calls, leftover scaffolding. Not yet done.
-Worth running `npx knip` or an equivalent unused-export finder rather than
-eyeballing, then verifying each deletion doesn't break `npm run verify`
-before removing it.
+### The Architect agent still runs on template/string-interpolation responses
+Found while dead-code-sweeping `architect-chat-provider.ts`:
+`CodexArchitectProvider.ask()`/`.proposePlan()` build their output by string
+interpolation, not a real model call — the same bug the OSINT runtime agents
+(`AgentRuntimeService`, `ChatProviderResolver`) were rewritten to fix earlier
+this session, except the Architect agent (used for code-planning tasks, a
+separate feature from OSINT investigation) never got the equivalent
+treatment. Not fixed here — this is a real feature gap, not a quick patch,
+same category as the four items that opened this session's fixing pass.
 
 ## Recently completed (context for what NOT to redo)
 
@@ -113,3 +84,31 @@ before removing it.
   accidentally-committed `.claude/` skill-package files were untracked.
 - 15 stale `phase/*` branches deleted from the remote; `working` created from
   `main` as the new active branch (2026-08-24).
+- "Watch `<uuid>` does not exist" recurring banner — see above, fixed.
+- Floating "+ Add watch" header button — root cause was `.section-title-row-wide`
+  having no CSS rule at all (used in 21 places across 9 components, silently
+  falling back to a fixed 36px trailing column). Fixed with the missing rule
+  (`minmax(0, 1fr) auto`); verified via computed layout that "Add watch" now
+  renders on 1 line instead of 2.
+- OSINT agent citation-format failures on IP-seed runs (2 of 3 live attempts
+  failed) — two real causes found via live repro with raw-response logging:
+  a model sending "sources" as a comma-joined string instead of a JSON array
+  (schema now normalizes it), and the citation-list prompt format being
+  genuinely ambiguous about where a key ends and its description begins
+  (reformatted to an unambiguous "key | description" separator). 10
+  consecutive live IP-seed runs succeeded after both fixes, versus 1 of 3
+  before.
+- SQLite connection had no `busy_timeout` set (defaulted to 0 — any momentary
+  lock contention failed immediately instead of retrying) — hardened to
+  5000ms. Prompted by a live "database disk image is malformed" report;
+  `PRAGMA integrity_check` on the real database came back clean, so this was
+  very likely a transient connection hiccup, not real corruption. Watch for
+  whether it recurs.
+- Dead-code sweep (via `knip`, configured with the app's real entry points):
+  deleted an orphaned duplicate `reports-view.tsx` (cases-view.tsx already
+  has the same report-generation UI built in), a fully-superseded
+  `src/shared/types/architect-agent.ts`, and two abandoned planning-stage
+  connector stubs (`src/tools/holehe.ts`, `src/tools/ignorant.ts` — same dead
+  pattern as `sherlock.ts`, already deleted during the GitHub merge). Also
+  declared two real undeclared dependencies (`three-stdlib`, `jszip`) that
+  were only working by transitive-dependency luck.
