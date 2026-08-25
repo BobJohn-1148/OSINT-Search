@@ -16,6 +16,12 @@ const defaultSource: KeySource = "openai";
 const cleanIdleSettingKey = "agents.cleanIdleStatuses";
 const wslDistroSettingKey = WSL_DISTRO_SETTING_KEY;
 const sharedMemoryScopeSettingKey = "agents.sharedMemoryScope";
+// One settings row per id (never a JSON blob -- see settings.ts's own
+// comment against arbitrary shapes in this string-valued store) so a Test
+// result outlives the render: without this, `diagnostics` was plain React
+// state that reset to {} on every launch, so a light that had gone green
+// silently went back to grey/red the moment the app restarted.
+const diagnosticSettingPrefix = "providers.diagnostics.";
 
 export function SettingsView() {
   const { invoke } = useReacherClient();
@@ -64,6 +70,29 @@ export function SettingsView() {
       setSharedMemoryScope(memoryScopeResult.value.value);
     }
 
+    // A previous Test's light only exists as one settings row per id, so it
+    // has to be re-fetched by id once the ids themselves are known -- there
+    // is no way to ask for "every diagnostic" up front.
+    const ids = new Set<string>([
+      ...(keyResult.ok ? keyResult.value.keys.map((key) => key.source) : []),
+      ...(providerResult.ok ? providerResult.value.providers.map((provider) => provider.id) : [])
+    ]);
+    const diagnosticResults = await Promise.all(
+      [...ids].map(async (id) => {
+        const result = await invoke("settings:get", { key: `${diagnosticSettingPrefix}${id}` });
+        return { id, value: result.ok ? result.value.value : null };
+      })
+    );
+    setDiagnostics((current) => {
+      const next = { ...current };
+      for (const { id, value } of diagnosticResults) {
+        if (value === "ok" || value === "error") {
+          next[id] = value;
+        }
+      }
+      return next;
+    });
+
     const error = [keyResult, providerResult, agentResult, cleanResult, wslResult, memoryScopeResult].find((result) => !result.ok);
     setStatus(error?.ok === false ? error.error.message : "Settings loaded");
     setLoadingLabel("");
@@ -94,7 +123,9 @@ export function SettingsView() {
   async function testKey(keySource: KeySource): Promise<void> {
     setLoadingLabel(`Testing ${keySource}`);
     const result = await invoke("keys:test", { source: keySource });
-    setDiagnostics((current) => ({ ...current, [keySource]: result.ok && result.value.ok ? "ok" : "error" }));
+    const diagnostic = result.ok && result.value.ok ? "ok" : "error";
+    setDiagnostics((current) => ({ ...current, [keySource]: diagnostic }));
+    await invoke("settings:set", { key: `${diagnosticSettingPrefix}${keySource}`, value: diagnostic });
     setStatus(result.ok ? result.value.message : result.error.message);
     await refresh();
   }
@@ -102,6 +133,13 @@ export function SettingsView() {
   async function revokeKey(keySource: KeySource): Promise<void> {
     setLoadingLabel(`Revoking ${keySource}`);
     const result = await invoke("keys:revoke", { source: keySource });
+    if (result.ok && result.value.revoked) {
+      // A green light from a Test against a key that no longer exists would
+      // be a lie, so the stale diagnostic goes with the key rather than
+      // outliving it. "untested" (not "ok"/"error") reads back as unset.
+      setDiagnostics((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== keySource)));
+      await invoke("settings:set", { key: `${diagnosticSettingPrefix}${keySource}`, value: "untested" });
+    }
     setStatus(result.ok && result.value.revoked ? `${keySource} key revoked` : "No key was revoked");
     await refresh();
   }
@@ -109,7 +147,9 @@ export function SettingsView() {
   async function testProvider(provider: ProviderInfo): Promise<void> {
     setLoadingLabel(`Testing ${provider.label}`);
     const result = await invoke("providers:test", { provider: provider.id });
-    setDiagnostics((current) => ({ ...current, [provider.id]: result.ok && result.value.ok ? "ok" : "error" }));
+    const diagnostic = result.ok && result.value.ok ? "ok" : "error";
+    setDiagnostics((current) => ({ ...current, [provider.id]: diagnostic }));
+    await invoke("settings:set", { key: `${diagnosticSettingPrefix}${provider.id}`, value: diagnostic });
     setStatus(result.ok ? result.value.message : result.error.message);
     await refresh();
   }

@@ -44,7 +44,10 @@ export function AgentsView() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [caseId, setCaseId] = useState("");
-  const [missionBrief, setMissionBrief] = useState("Build an OSINT profile for jdoe and summarize useful pivots.");
+  // Keyed by agent id, not one flat string: each agent has its own specialty
+  // (see agent-personas.ts), so the brief you left for Scout should not show
+  // up as Ripper's task the moment you switch the selector.
+  const [missionBriefs, setMissionBriefs] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("Connecting");
   const [idleTick, setIdleTick] = useState(0);
   const [events, setEvents] = useState<AgentRuntimeEvent[]>([]);
@@ -169,6 +172,7 @@ export function AgentsView() {
   const workingCount = presentations.filter((agent) => agent.working).length;
   const idleCount = presentations.filter((agent) => agent.state.status === "idle").length;
   const selectedPersona = presentations.find((agent) => agent.agent.id === activeAgentId)?.persona ?? null;
+  const missionBrief = activeAgentId ? missionBriefs[activeAgentId] ?? defaultMissionBrief(selectedPersona?.role) : "";
   const selectedProvider = providers.find((provider) => provider.id === selectedAgent?.provider) ?? null;
   const supportedEfforts = selectedProvider?.supportedEfforts ?? [];
   const insights = useMemo(
@@ -326,7 +330,16 @@ export function AgentsView() {
           ) : null}
           <label className="compact-field">
             Mission brief
-            <textarea className="agent-brief-input" value={missionBrief} onChange={(event) => setMissionBrief(event.target.value)} />
+            <textarea
+              className="agent-brief-input"
+              value={missionBrief}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (activeAgentId) {
+                  setMissionBriefs((current) => ({ ...current, [activeAgentId]: nextValue }));
+                }
+              }}
+            />
           </label>
           {selectedAgent ? (
             supportedEfforts.length > 0 ? (
@@ -546,6 +559,38 @@ function InsightBars({
       )}
     </div>
   );
+}
+
+/**
+ * Seeds the brief textarea from the agent's own persona role (agent-personas.ts)
+ * instead of one fixed sentence for every agent, so Scout starts pointed at
+ * recon and Ripper starts pointed at credentials rather than both opening on
+ * an identical "build an OSINT profile" task that only ever suited the OSINT
+ * agent itself.
+ */
+function defaultMissionBrief(role: string | undefined): string {
+  if (!role) {
+    return "";
+  }
+  if (role.includes("recon")) {
+    return "Recon the seed's infrastructure and surface pivots worth chasing.";
+  }
+  if (role.includes("Credential")) {
+    return "Check the seed for exposed credentials and summarize what's crackable.";
+  }
+  if (role.includes("malware")) {
+    return "Statically triage the seed and report indicators without executing anything.";
+  }
+  if (role.includes("analysis")) {
+    return "Analyze the seed's logs, packets, or artifacts and surface anomalies.";
+  }
+  if (role.includes("collection")) {
+    return "Build a cited OSINT profile for the seed and summarize useful pivots.";
+  }
+  if (role.includes("plan")) {
+    return "Review the current implementation and propose next steps.";
+  }
+  return "Investigate the seed and summarize findings.";
 }
 
 function inferSeed(text: string): { readonly type: SeedType; readonly value: string } {

@@ -284,3 +284,34 @@ it("tests an agent's provider from its card so a key can be verified in place", 
   });
   expect(await screen.findByText(/ok: reachable/i)).toBeInTheDocument();
 });
+
+it("gives each agent its own default mission brief instead of one shared sentence for every agent", async () => {
+  const user = userEvent.setup();
+  const twoAgents: AgentRecord[] = [
+    { ...testAgents[0], id: "scout-agent", name: "Scout agent" },
+    { ...testAgents[0], id: "ripper-agent", name: "Ripper agent" }
+  ];
+  const invoke = vi.fn<RendererInvokeMock>((channel) => {
+    if (channel === "agents:list") {
+      return Promise.resolve({ ok: true as const, value: { agents: twoAgents } });
+    }
+    return defaultInvoke(channel);
+  });
+  installBridge(invoke);
+
+  render(<AgentsView />);
+
+  await user.click(await screen.findByRole("button", { name: /Scout agent/i }));
+  const scoutBrief = (await screen.findByLabelText<HTMLTextAreaElement>("Mission brief")).value;
+
+  await user.click(screen.getByRole("button", { name: /Ripper agent/i }));
+  const ripperBrief = screen.getByLabelText<HTMLTextAreaElement>("Mission brief").value;
+
+  expect(scoutBrief).not.toBe(ripperBrief);
+  expect(scoutBrief).not.toBe("Build an OSINT profile for jdoe and summarize useful pivots.");
+
+  // Switching back to Scout must not have lost anything it had -- each
+  // agent's brief is independent state, not a single shared field.
+  await user.click(screen.getByRole("button", { name: /Scout agent/i }));
+  expect(screen.getByLabelText<HTMLTextAreaElement>("Mission brief").value).toBe(scoutBrief);
+});
