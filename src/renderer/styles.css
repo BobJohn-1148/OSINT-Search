@@ -3264,10 +3264,49 @@ select option:hover {
 .case-summary-card,
 .case-evidence-card,
 .case-reports-card,
-.case-tools-card {
+.case-tools-card,
+.case-patterns-card {
   display: grid;
   gap: 14px;
   align-content: start;
+}
+
+.pattern-finding-card {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-app);
+  padding: 10px;
+}
+
+.pattern-finding-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pattern-finding-citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pattern-citation-chip {
+  border: 1px solid var(--color-accent-border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--color-accent-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.pattern-citation-chip:hover,
+.pattern-citation-chip:focus-visible {
+  background: var(--color-accent-surface);
 }
 
 /* VS Code-style case file tree. */

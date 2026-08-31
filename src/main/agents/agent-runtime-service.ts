@@ -40,6 +40,7 @@ import type { AgentSeed } from "../../shared/types/agents-runtime.js";
 import type { Observation } from "../../shared/types/search.js";
 import { ChatProviderResolver } from "../providers/chat-providers.js";
 import { AgentEventBatcher } from "./agent-event-batcher.js";
+import { citationArrayField } from "./model-citation-field.js";
 
 const MEMORY_CONTEXT_LIMIT = 20;
 const CASE_CONTEXT_LIMIT = 20;
@@ -57,27 +58,14 @@ const OBSERVATION_CONTEXT_LIMIT = 40;
 // normalizing it to a one-element array here still yields zero grounded
 // citations for that step, exactly as if the model had cited nothing. This
 // converts "the run fails" into "the run succeeds with fewer citations",
-// without loosening what counts as a valid citation at all.
-// A separate live run showed a model can also wrap an otherwise-correct key
-// in decorative formatting it copied from an earlier prompt iteration (e.g.
-// `KEY="observation:...:0"`, quotes and label included, as one array
-// entry) rather than the bare key. Stripping a leading label and any
-// surrounding quotes only ever removes formatting the citation map would
-// never contain -- it cannot turn a wrong key into a real one, so this can
-// only recover a citation, never fabricate a match.
-function cleanSourceToken(value: string): string {
-  return value
-    .trim()
-    .replace(/^key\s*=\s*/i, "")
-    .replace(/^["']|["']$/g, "")
-    .trim();
-}
-
-const sourcesField = z
-  .union([z.array(z.string().min(1)), z.string().min(1)])
-  .optional()
-  .transform((value) => (Array.isArray(value) ? value : value ? [value] : []))
-  .transform((values) => values.map(cleanSourceToken).filter((value) => value.length > 0));
+// without loosening what counts as a valid citation at all. A separate live
+// run showed a model can also wrap an otherwise-correct key in decorative
+// formatting it copied from an earlier prompt iteration (e.g.
+// `KEY="observation:...:0"`, quotes and label included, as one array entry)
+// rather than the bare key -- model-citation-field.ts strips both. Shared with
+// pattern-analysis-service.ts so a second agent asking for a citation-key
+// array does not have to rediscover either failure mode on its own.
+const sourcesField = citationArrayField;
 
 const modelStepSchema = z.object({
   title: z.string().min(1),

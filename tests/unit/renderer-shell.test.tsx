@@ -230,6 +230,9 @@ function createDefaultInvokeMock() {
     if (channel === "case:documents:list") {
       return Promise.resolve({ ok: true as const, value: { documents: [] } });
     }
+    if (channel === "pattern:list" || channel === "pattern:run") {
+      return Promise.resolve({ ok: true as const, value: { findings: [] } });
+    }
     if (channel === "case:document:upsert") {
       return Promise.resolve({
         ok: true as const,
@@ -831,6 +834,9 @@ it("cases route renders timeline items so saved evidence can be verified", async
     if (channel === "case:documents:list") {
       return Promise.resolve({ ok: true as const, value: { documents: [] } });
     }
+    if (channel === "pattern:list" || channel === "pattern:run") {
+      return Promise.resolve({ ok: true as const, value: { findings: [] } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -885,6 +891,9 @@ it("cases route generates a PDF from a selected case so reports live under cases
     }
     if (channel === "case:documents:list") {
       return Promise.resolve({ ok: true as const, value: { documents: [] } });
+    }
+    if (channel === "pattern:list" || channel === "pattern:run") {
+      return Promise.resolve({ ok: true as const, value: { findings: [] } });
     }
     if (channel === "report:generate") {
       generatedReport = {

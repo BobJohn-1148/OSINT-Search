@@ -31,6 +31,7 @@ import { migration024RevShellsLabToolCatalog } from "./024-revshells-lab-tool-ca
 import { migration025ScoutByteAgentDefaults } from "./025-scout-byte-agent-defaults.js";
 import { migration026RunnableAgentModels } from "./026-runnable-agent-models.js";
 import { migration027ArchitectAgentRunnableDefault } from "./027-architect-agent-runnable-default.js";
+import { migration028PatternAgent } from "./028-pattern-agent.js";
 
 export interface Migration {
   readonly id: number;
@@ -65,5 +66,6 @@ export const migrations: readonly Migration[] = [
   migration024RevShellsLabToolCatalog,
   migration025ScoutByteAgentDefaults,
   migration026RunnableAgentModels,
-  migration027ArchitectAgentRunnableDefault
+  migration027ArchitectAgentRunnableDefault,
+  migration028PatternAgent
 ];

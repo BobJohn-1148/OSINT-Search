@@ -46,6 +46,7 @@ import { createImageUsernameHandlers } from "./handlers/image-username-handlers.
 import { createMethodologyHandlers } from "./handlers/methodology-handlers.js";
 import { createMonitoringHandlers } from "./handlers/monitoring-handlers.js";
 import { createMobileHandlers } from "./handlers/mobile-handlers.js";
+import { createPatternAnalysisHandlers } from "./handlers/pattern-analysis-handlers.js";
 import { createProvidersHandlers } from "./handlers/providers-handlers.js";
 import { createReportsHandlers } from "./handlers/reports-handlers.js";
 import { createScanHandlers } from "./handlers/scan-handlers.js";
@@ -67,6 +68,7 @@ import { ImageUsernameService } from "../image-username/image-username-service.j
 import { MonitoringService } from "../monitoring/monitoring-service.js";
 import { DashboardService } from "../dashboard/dashboard-service.js";
 import { MobileService } from "../mobile/mobile-service.js";
+import { PatternAnalysisService } from "../agents/pattern-analysis-service.js";
 import { SocialAnalyzerService } from "../social/social-analyzer-service.js";
 import { MethodologyService } from "../methodology/methodology-service.js";
 
@@ -123,6 +125,17 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     chatProviderResolver
   );
   const dashboardService = new DashboardService(dashboardRepository, auditRepository, agentRuntimeService);
+  const patternAnalysisService = new PatternAnalysisService(
+    agentsRepository,
+    agentRuntimeRepository,
+    casesRepository,
+    auditRepository,
+    app.getAppPath(),
+    // Clock stays defaulted; only the resolver below needs injecting, same as
+    // agentRuntimeService just above.
+    undefined,
+    chatProviderResolver
+  );
   const emitToolOutput = (event: ToolOutputEvent): void => {
     for (const webContents of BrowserWindow.getAllWindows().map((window) => window.webContents)) {
       webContents.send("tools:output", event);
@@ -250,6 +263,7 @@ export function registerIpcHandlers(db: ReacherDatabase, vaultCrypto: VaultCrypt
     ...createAgentsHandlers(agentsRepository),
     ...createAgentRuntimeHandlers(agentRuntimeService, agentRuntimeRepository),
     ...createArchitectAgentHandlers(architectAgentService),
+    ...createPatternAnalysisHandlers(patternAnalysisService),
     ...createToolsHandlers(toolsService),
     ...createAnalyzersHandlers(analyzersService),
     ...createMonitoringHandlers(monitoringService),

@@ -48,7 +48,8 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     { id: 24, name: "revshells-lab-tool-catalog" },
     { id: 25, name: "scout-byte-agent-defaults" },
     { id: 26, name: "runnable-agent-models" },
-    { id: 27, name: "architect-agent-runnable-default" }
+    { id: 27, name: "architect-agent-runnable-default" },
+    { id: 28, name: "pattern-agent" }
   ]);
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'settings'").get()).toBeTruthy();
   expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'audit_events'").get()).toBeTruthy();
@@ -120,6 +121,13 @@ it("migration runner applies migrations and is idempotent on second run", () => 
     provider: "ollama",
     model: "llama3.1:8b"
   });
+  // Migration 028 seeds the fourth agent, defaulting to the same runnable local
+  // model as every other agent migrations 026/027 moved onto.
+  expect(db.prepare("SELECT provider, model, prompt_path FROM agents WHERE id = 'pattern-agent'").get()).toEqual({
+    provider: "ollama",
+    model: "llama3.1:8b",
+    prompt_path: "planning/agent-prompts/pattern-agent.md"
+  });
 });
 
 it("migration 026 leaves a deliberately chosen model alone so a bigger machine keeps its 70B pick", () => {
@@ -182,6 +190,38 @@ it("migration 027 leaves a deliberately chosen architect provider alone", () => 
     provider: "anthropic",
     model: "claude-sonnet-5"
   });
+});
+
+it("migration 028 widens case_items.item_type without losing existing rows or the FTS index", () => {
+  const db = openMemoryDatabase();
+  for (const migration of migrations.filter((entry) => entry.id < 28)) {
+    migration.up(db);
+  }
+  db.prepare("INSERT INTO cases (id, title, status) VALUES ('case-one', 'Pre-existing case', 'open')").run();
+  db.prepare(
+    `INSERT INTO case_items (id, case_id, item_type, ref_id, title, text, source_ts, metadata)
+     VALUES ('item-one', 'case-one', 'observation', NULL, 'Pre-existing item', 'mentions jdoe', '2026-01-01T00:00:00.000Z', '{}')`
+  ).run();
+  expect(() =>
+    db.prepare(
+      `INSERT INTO case_items (id, case_id, item_type, ref_id, title, text, source_ts, metadata)
+       VALUES ('item-blocked', 'case-one', 'pattern_finding', NULL, 't', 't', '2026-01-01T00:00:00.000Z', '{}')`
+    ).run()
+  ).toThrow();
+
+  migrations.find((entry) => entry.id === 28)?.up(db);
+
+  expect(db.prepare("SELECT id, item_type, title FROM case_items WHERE id = 'item-one'").get()).toEqual({
+    id: "item-one",
+    item_type: "observation",
+    title: "Pre-existing item"
+  });
+  db.prepare(
+    `INSERT INTO case_items (id, case_id, item_type, ref_id, title, text, source_ts, metadata)
+     VALUES ('item-two', 'case-one', 'pattern_finding', NULL, 'Pattern item', 'pattern text', '2026-01-01T00:00:00.000Z', '{}')`
+  ).run();
+  expect(db.prepare("SELECT id FROM case_items_fts WHERE case_items_fts MATCH 'jdoe'").all()).toEqual([{ id: "item-one" }]);
+  expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
 });
 
 it("phase 13 migration preserves existing tool runs so upgraded databases keep catalog evidence", () => {

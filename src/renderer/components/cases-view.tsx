@@ -21,11 +21,14 @@ import {
   RefreshCw,
   Save,
   Search,
-  ScrollText
+  ScrollText,
+  Sparkles,
+  Workflow
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CaseDocument, CaseItem, CaseRecord, CaseSummary } from "../../shared/schemas/cases";
+import type { PatternFinding } from "../../shared/schemas/pattern-analysis";
 import type { ReportRecord } from "../../shared/schemas/reports";
 import type { ReportFormat } from "../../shared/types/reports";
 import { useReacherClient } from "../hooks/use-reacher-client";
@@ -63,6 +66,8 @@ export function CasesView() {
   const [summary, setSummary] = useState<CaseSummary | null>(null);
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [reports, setReports] = useState<ReportRecord[]>([]);
+  const [patterns, setPatterns] = useState<PatternFinding[]>([]);
+  const [runningPatterns, setRunningPatterns] = useState(false);
   const [title, setTitle] = useState("New investigation");
   const [tags, setTags] = useState("client, osint");
   const [query, setQuery] = useState("");
@@ -129,6 +134,7 @@ export function CasesView() {
       setTimeline([]);
       setSummary(null);
       setDocuments([]);
+      setPatterns([]);
       setDraft(emptyDocumentDraft());
       setActiveNode(null);
       setStatus("Create a case to start a document");
@@ -136,10 +142,11 @@ export function CasesView() {
       return;
     }
 
-    const [timelineResult, summaryResult, documentsResult] = await Promise.all([
+    const [timelineResult, summaryResult, documentsResult, patternsResult] = await Promise.all([
       invoke("case:timeline", { caseId: nextCase.id }),
       invoke("case:summary", { caseId: nextCase.id }),
-      invoke("case:documents:list", { caseId: nextCase.id })
+      invoke("case:documents:list", { caseId: nextCase.id }),
+      invoke("pattern:list", { caseId: nextCase.id })
     ]);
     if (timelineResult.ok) {
       setTimeline(timelineResult.value.items);
@@ -151,7 +158,10 @@ export function CasesView() {
       setDocuments(documentsResult.value.documents);
       setDraft(documentsResult.value.documents[0] ? toDraft(documentsResult.value.documents[0]) : emptyDocumentDraft(nextCase.title));
     }
-    const error = [timelineResult, summaryResult, documentsResult, reportsResult].find((result) => !result.ok);
+    if (patternsResult.ok) {
+      setPatterns(patternsResult.value.findings);
+    }
+    const error = [timelineResult, summaryResult, documentsResult, patternsResult, reportsResult].find((result) => !result.ok);
     setStatus(error?.ok === false ? error.error.message : "Case workspace ready");
     setLoading(false);
   }, [invoke, selectedCase?.id]);
@@ -245,6 +255,30 @@ export function CasesView() {
   async function openReport(reportId: string): Promise<void> {
     const result = await invoke("report:open", { reportId });
     setStatus(result.ok ? "Report opened" : result.error.message);
+  }
+
+  async function runPatternAnalysis(): Promise<void> {
+    if (!selectedCase) {
+      setStatus("Create a case before running pattern analysis");
+      return;
+    }
+    setRunningPatterns(true);
+    const result = await invoke("pattern:run", { caseId: selectedCase.id });
+    setRunningPatterns(false);
+    if (!result.ok) {
+      setStatus(result.error.message);
+      return;
+    }
+    setStatus(
+      result.value.findings.length > 0
+        ? `Found ${result.value.findings.length} pattern${result.value.findings.length === 1 ? "" : "s"}`
+        : "No patterns found in this case's evidence yet"
+    );
+    await refresh(selectedCase.id);
+  }
+
+  function focusEvidence(itemId: string): void {
+    setActiveNode({ kind: "evidence", id: itemId });
   }
 
   function newDocument(): void {
@@ -447,6 +481,45 @@ export function CasesView() {
               {generatingReport ? "Generating" : "Generate report"}
             </button>
           </section>
+
+          <section className="console-panel case-patterns-card" aria-labelledby="case-patterns-title">
+            <div className="section-title-row section-title-row-wide">
+              <h2 className="section-title" id="case-patterns-title">
+                <Workflow size={16} aria-hidden="true" />
+                Pattern analysis
+              </h2>
+            </div>
+            <p className="status-text">Looks across this case's saved evidence for recurring identifiers, time or place clusters, and contradictions -- never a new fact, only connections between what is already cited.</p>
+            <button className="action-button primary-action" type="button" disabled={runningPatterns || timeline.length === 0} onClick={() => void runPatternAnalysis()}>
+              <Sparkles size={16} aria-hidden="true" />
+              {runningPatterns ? "Analyzing" : "Run pattern analysis"}
+            </button>
+            {timeline.length === 0 ? <p className="status-text">Save some evidence to this case first.</p> : null}
+            <div className="table-list">
+              {patterns.map((pattern) => (
+                <div className="pattern-finding-card" key={pattern.id}>
+                  <div className="pattern-finding-head">
+                    <span className="tool-card-kicker">{formatPatternType(pattern.patternType)}</span>
+                    <span className="strength-pill">{pattern.confidence}</span>
+                  </div>
+                  <p className="console-line">{pattern.description}</p>
+                  <div className="pattern-finding-citations">
+                    {pattern.observationIds.map((observationId) => (
+                      <button
+                        className="pattern-citation-chip"
+                        type="button"
+                        key={observationId}
+                        onClick={() => focusEvidence(observationId)}
+                      >
+                        {timeline.find((item) => item.id === observationId)?.title ?? observationId}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {patterns.length === 0 && timeline.length > 0 ? <p className="status-text">No patterns found yet.</p> : null}
+            </div>
+          </section>
         </aside>
       </div>
 
@@ -553,6 +626,10 @@ function RouteLoading(props: { readonly label: string }) {
       <span>{props.label}</span>
     </div>
   );
+}
+
+function formatPatternType(patternType: string): string {
+  return patternType.replace(/_/g, " ");
 }
 
 function toDraft(document: CaseDocument): DocumentDraft {

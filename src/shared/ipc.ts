@@ -84,6 +84,12 @@ import {
   dashboardSummaryResponseSchema
 } from "./schemas/dashboard.js";
 import {
+  patternListRequestSchema,
+  patternListResponseSchema,
+  patternRunRequestSchema,
+  patternRunResponseSchema
+} from "./schemas/pattern-analysis.js";
+import {
   keysAddRequestSchema,
   keysAddResponseSchema,
   keysListRequestSchema,
@@ -413,6 +419,22 @@ export const IPC = {
     sensitivity: "medium",
     mutates: true,
     summary: "Applies a drafted architect plan only after a main-process confirmation."
+  }),
+  "pattern:run": defineChannel({
+    request: patternRunRequestSchema,
+    response: patternRunResponseSchema,
+    capability: "agents.run",
+    sensitivity: "medium",
+    mutates: true,
+    summary: "Runs the pattern-analysis agent across a case's existing cited evidence."
+  }),
+  "pattern:list": defineChannel({
+    request: patternListRequestSchema,
+    response: patternListResponseSchema,
+    capability: "agents.readPatterns",
+    sensitivity: "medium",
+    mutates: false,
+    summary: "Lists persisted pattern findings for a case."
   }),
   "search:run": defineChannel({
     request: searchRunRequestSchema,
