@@ -35,7 +35,25 @@ quick copy change.
 
 ## Discovered, not yet actioned
 
-(none open right now)
+### `phase-audit.mjs` phases 5, 11, 12, and 13 no longer pass
+`npm run verify` only ever runs `phase-audit.mjs 15` (the current phase), so
+this was invisible until each historical phase was run by hand. Phase 6's and
+phase 4's blocks were stale for a reason this session directly caused (the
+architect-agent rewrite deleting `architect-chat-provider.ts`; the dead-code
+sweep deleting `reports-view.tsx`) and both are fixed now. Phases 5, 11, 12,
+and 13 are different: `git log -S` for their missing strings ("Quick search",
+"Social analyzer", "Username sweep", the HQ-scene camera/fallback tests)
+returns no history at all on this branch, which points at the branch-history
+restructuring (squash/snapshot commits like "Baseline snapshot of canonical
+Reacher before Codex consolidation work" and "Codex Desktop snapshot before
+retirement" don't leave a clean diff trail) rather than anything from this
+session. Each of those UI surfaces may well still work correctly — this is an
+audit-script staleness finding, not a confirmed product regression — but
+someone needs to sit down with each of the four phases, re-verify the actual
+current UI against its original exit criteria, and update the pinned
+mechanisms/test strings to match. Left undone here since it's a multi-phase
+reconciliation task, not a quick patch, and the two failures this session
+actually caused are already fixed.
 
 ## Recently completed (context for what NOT to redo)
 

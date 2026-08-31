@@ -135,9 +135,12 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("generation writes an audit event", "generation audited");
 
   assertIncludes("src/db/migrations/008-reports.ts", "reports", "report row migration");
-  assertIncludes("src/renderer/components/reports-view.tsx", "report:generate", "reports list surface mechanism");
+  // The standalone reports-view.tsx was deleted during a dead-code sweep --
+  // cases-view.tsx already had the same generate-report UI built in, so the
+  // surface moved rather than disappearing.
+  assertIncludes("src/renderer/components/cases-view.tsx", "report:generate", "reports list surface mechanism");
   assertAnyTestIncludes("output is deterministic for a fixed fixture", "deterministic output");
-  assertAnyTestIncludes("reports route generates a PDF from a selected case", "reports surface");
+  assertAnyTestIncludes("cases route generates a PDF from a selected case", "reports surface");
 } else if (requestedPhase === 5) {
   assertIncludes("src/main/agents/agent-runtime-service.ts", "STEP_FORMAT.parse", "agent loop validates strict steps");
   assertIncludes("src/main/agents/agent-runtime-service.ts", "agentFindingSchema.parse", "cited finding gate mechanism");
@@ -168,10 +171,14 @@ if (!Number.isInteger(requestedPhase) || requestedPhase < 0 || requestedPhase > 
   assertAnyTestIncludes("search route sends a selected tree node to an agent", "send-to-agent search handoff");
 } else if (requestedPhase === 6) {
   assertIncludes("src/main/agents/architect-agent-service.ts", "RepoReadTool", "architect repo-read mechanism");
-  assertIncludes("src/main/agents/architect-chat-provider.ts", "ArchitectChatProvider", "architect provider abstraction");
-  assertIncludes("src/main/agents/architect-chat-provider.ts", "ArchitectProviderResolver", "architect provider resolver");
-  assertIncludes("src/main/agents/architect-agent-service.ts", "provider.ask", "architect ask provider call");
-  assertIncludes("src/main/agents/architect-agent-service.ts", "provider.proposePlan", "architect plan provider call");
+  // Phase 15 replaced the Codex-only ArchitectChatProvider/ArchitectProviderResolver
+  // abstraction (architect-chat-provider.ts, deleted) with the same real
+  // ChatProviderResolver the OSINT agents use, so both ask() and proposePlan()
+  // make one real provider.complete() call instead of two Codex-shaped methods.
+  assertIncludes("src/main/providers/chat-providers.ts", "ChatProviderResolver", "architect provider resolver");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "providerResolver.resolve", "architect resolves a real provider");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "provider.complete", "architect real model call mechanism");
+  assertIncludes("src/main/agents/architect-agent-service.ts", "citedFiles.has", "architect plan grounds proposed files against real citations");
   assertIncludes("src/main/agents/architect-apply-executor.ts", "PlanArtifactApplyExecutor", "architect apply executor mechanism");
   assertIncludes("src/main/agents/architect-apply-executor.ts", "realpathSync.native", "architect apply canonical write boundary");
   assertIncludes("src/main/agents/architect-agent-service.ts", "applyExecutor.apply", "architect approved write mechanism");
