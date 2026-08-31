@@ -8,19 +8,28 @@
  * watchlist controls and the exposure tables. Every number is derived from the
  * same summary/watch/exposure read model so nothing on the wall can drift from
  * the audited state behind it.
+ *
+ * One card breaks that pattern: quick search is the only control here that
+ * starts new work rather than reporting on it. It hands a typed seed to the
+ * Search route (REACHER_PLAN.md phase 12) via the same router-state handoff the
+ * analyzers view uses for its pivots, rather than running a fan-out the
+ * dashboard has nowhere to render.
  */
 import { Bot, ExternalLink, Eye, Globe, Mail, Phone, Plus, RefreshCw, Search, ShieldAlert, Trash2, User } from "lucide-react";
 import type { CSSProperties, ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { AgentLiveState, AgentRunRecord } from "../../shared/schemas/agents-runtime";
 import type { DashboardSummaryResponse } from "../../shared/schemas/dashboard";
 import type { CaseRecord } from "../../shared/schemas/cases";
 import type { ExposureRecord, MonitoringAlert, WatchRecord } from "../../shared/schemas/monitoring";
 import type { WatchTargetType } from "../../shared/types/monitoring";
+import { seedTypeValues, type SeedType } from "../../shared/types/search";
 import { useReacherClient } from "../hooks/use-reacher-client";
 
 export function DashboardView() {
   const { invoke } = useReacherClient();
+  const navigate = useNavigate();
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [watches, setWatches] = useState<WatchRecord[]>([]);
   const [alerts, setAlerts] = useState<MonitoringAlert[]>([]);
@@ -30,6 +39,8 @@ export function DashboardView() {
   const [value, setValue] = useState("security@example.com");
   const [caseId, setCaseId] = useState("");
   const [showWatchForm, setShowWatchForm] = useState(false);
+  const [quickSeedType, setQuickSeedType] = useState<SeedType>("domain");
+  const [quickSeedValue, setQuickSeedValue] = useState("");
   const [status, setStatus] = useState("Monitoring ready");
   const [loadingLabel, setLoadingLabel] = useState("Loading dashboard");
   const [reachability, setReachability] = useState<Record<string, boolean | null>>({});
@@ -155,6 +166,18 @@ export function DashboardView() {
     await refresh();
   }
 
+  function runQuickSearch(): void {
+    const value = quickSeedValue.trim();
+    if (!value) {
+      announceStatus("Enter a quick search target");
+      return;
+    }
+    // Search owns seed auto-detection and the live board, so the dashboard only
+    // seeds it -- the same { state: { seed } } handoff analyzers-view uses to
+    // pivot an IOC into a search.
+    void navigate("/search", { state: { seed: { type: quickSeedType, value } } });
+  }
+
   const agentStates = summary?.agentStatus.states ?? [];
   const fleetTotal = agentStates.length;
   const workingCount = summary?.agentStatus.working ?? 0;
@@ -173,6 +196,47 @@ export function DashboardView() {
       </header>
 
       <div className="dashboard-wall">
+        <section className="console-panel dashboard-card" aria-labelledby="quick-search-title">
+          <h2 className="section-title" id="quick-search-title">Quick search</h2>
+          <div className="dashboard-quick-search">
+            <label className="compact-field">
+              Type
+              <select
+                className="field-control"
+                aria-label="Quick search seed type"
+                value={quickSeedType}
+                onChange={(event) => setQuickSeedType(event.target.value as SeedType)}
+              >
+                {seedTypeValues
+                  .filter((seedType) => seedType !== "image")
+                  .map((seedType) => (
+                    <option key={seedType} value={seedType}>
+                      {seedType}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="compact-field">
+              Target
+              <input
+                className="field-control"
+                aria-label="Quick search target"
+                value={quickSeedValue}
+                onChange={(event) => setQuickSeedValue(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    runQuickSearch();
+                  }
+                }}
+              />
+            </label>
+            <button className="action-button" type="button" onClick={() => runQuickSearch()}>
+              <Search size={16} aria-hidden="true" />
+              Run
+            </button>
+          </div>
+        </section>
+
         <section className="console-panel dashboard-card" aria-labelledby="recent-activity-title">
           <h2 className="section-title" id="recent-activity-title">Recent activity</h2>
           <div className="dashboard-activity-list">

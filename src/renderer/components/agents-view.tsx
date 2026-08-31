@@ -33,6 +33,13 @@ import { useReacherClient } from "../hooks/use-reacher-client";
 
 const statusLines = rawStatusLines as AgentStatusLinePool;
 
+// AGENTS_WORLD.md makes "clean idle statuses" a Settings toggle, so the den has
+// to read the persisted choice rather than hard-coding it: with the box off,
+// the coarser idle lines (agent-status-lines.json, nsfw:true) are allowed
+// through. The literal matches settings-view.tsx, which owns the checkbox --
+// both are pinned by phase-audit so the two cannot drift apart unnoticed.
+const cleanIdleSettingKey = "agents.cleanIdleStatuses";
+
 export function AgentsView() {
   const { invoke } = useReacherClient();
   const [agents, setAgents] = useState<AgentRecord[]>([]);
@@ -49,6 +56,9 @@ export function AgentsView() {
   // up as Ripper's task the moment you switch the selector.
   const [missionBriefs, setMissionBriefs] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("Connecting");
+  // Matches settings-view.tsx's own default: an unset setting reads as "off"
+  // (show every idle line), and only an explicit "true" filters the nsfw pool.
+  const [cleanIdleStatuses, setCleanIdleStatuses] = useState(false);
   const [idleTick, setIdleTick] = useState(0);
   const [events, setEvents] = useState<AgentRuntimeEvent[]>([]);
   const [architectQuestion, setArchitectQuestion] = useState("How is IPC wired?");
@@ -74,14 +84,15 @@ export function AgentsView() {
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
-    const [agentResult, stateResult, runsResult, memoryResult, playbooksResult, casesResult, providersResult] = await Promise.all([
+    const [agentResult, stateResult, runsResult, memoryResult, playbooksResult, casesResult, providersResult, cleanIdleResult] = await Promise.all([
       invoke("agents:list", {}),
       invoke("agent:states", {}),
       invoke("agent:runs", {}),
       invoke("agent:memory:list", { limit: 50 }),
       invoke("agent:playbooks", {}),
       invoke("cases:list", {}),
-      invoke("providers:list", {})
+      invoke("providers:list", {}),
+      invoke("settings:get", { key: cleanIdleSettingKey })
     ]);
 
     if (agentResult.ok) {
@@ -105,6 +116,9 @@ export function AgentsView() {
     if (casesResult.ok) {
       setCases(casesResult.value.cases);
       setCaseId((current) => current || (casesResult.value.cases[0]?.id ?? ""));
+    }
+    if (cleanIdleResult.ok) {
+      setCleanIdleStatuses(cleanIdleResult.value.value === "true");
     }
 
     const error = [agentResult, stateResult, runsResult, memoryResult, playbooksResult, casesResult].find((result) => !result.ok);
@@ -164,10 +178,10 @@ export function AgentsView() {
         agents,
         states,
         lines: statusLines,
-        cleanIdleStatuses: true,
+        cleanIdleStatuses,
         idleTick
       }),
-    [agents, idleTick, states]
+    [agents, cleanIdleStatuses, idleTick, states]
   );
   const workingCount = presentations.filter((agent) => agent.working).length;
   const idleCount = presentations.filter((agent) => agent.state.status === "idle").length;
