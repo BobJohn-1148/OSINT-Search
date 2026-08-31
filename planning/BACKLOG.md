@@ -35,27 +35,64 @@ quick copy change.
 
 ## Discovered, not yet actioned
 
-### `phase-audit.mjs` phases 5, 11, 12, and 13 no longer pass
-`npm run verify` only ever runs `phase-audit.mjs 15` (the current phase), so
-this was invisible until each historical phase was run by hand. Phase 6's and
-phase 4's blocks were stale for a reason this session directly caused (the
-architect-agent rewrite deleting `architect-chat-provider.ts`; the dead-code
-sweep deleting `reports-view.tsx`) and both are fixed now. Phases 5, 11, 12,
-and 13 are different: `git log -S` for their missing strings ("Quick search",
-"Social analyzer", "Username sweep", the HQ-scene camera/fallback tests)
-returns no history at all on this branch, which points at the branch-history
-restructuring (squash/snapshot commits like "Baseline snapshot of canonical
-Reacher before Codex consolidation work" and "Codex Desktop snapshot before
-retirement" don't leave a clean diff trail) rather than anything from this
-session. Each of those UI surfaces may well still work correctly — this is an
-audit-script staleness finding, not a confirmed product regression — but
-someone needs to sit down with each of the four phases, re-verify the actual
-current UI against its original exit criteria, and update the pinned
-mechanisms/test strings to match. Left undone here since it's a multi-phase
-reconciliation task, not a quick patch, and the two failures this session
-actually caused are already fixed.
+(none open right now)
 
 ## Recently completed (context for what NOT to redo)
+
+- Added a case-scoped pattern-analysis agent (`pattern-agent`) that looks
+  across a case's already-saved evidence for recurring identifiers, temporal/
+  geographic clusters, and contradictions -- never a new fact, only
+  connections between what is already cited. It doesn't fit
+  `agentSeedSchema`'s closed seed-type enum (seeded by a whole case, not one
+  entity), so it gets its own `pattern:run`/`pattern:list` request shape and
+  `PatternAnalysisService`, but reuses everything else: findings are ordinary
+  `case_items` rows (no new table -- migration 028 widens the `item_type`
+  CHECK via the same rename/rebuild/copy migration 016 used, rebuilding the
+  FTS5 index and triggers too), and provenance/shared memory piggyback on a
+  real `agent_runs` row the same way `architect-agent-service.ts` already
+  does for a request that isn't seed-shaped. Applied the citation-grounding
+  fix from architect-agent-service.ts (drop a finding outright once every one
+  of its ids is invented, don't keep it empty) from the start instead of
+  waiting to rediscover the same bug live, and extracted the OSINT agent's
+  citation-array parser (`model-citation-field.ts`) so both agents share one
+  proven defense against a small model's comma-joined-string/`KEY="..."`
+  mistakes instead of two copies. UI: a "Pattern analysis" card in the case
+  workspace with clickable citation chips that jump to the named evidence.
+  Verified live against a real running Ollama: correctly found both a real
+  recurring identifier and a real contradiction across a 3-item test case,
+  zero ungrounded citations.
+
+- `phase-audit.mjs` phases 5, 11, 12, and 13 reconciled against the current
+  UI. Nearly all of it was audit-script staleness from the pre-branch HQ /
+  search / social / dashboard redesigns, fixed the same way phases 4 and 6
+  were (repoint the pinned string at the real mechanism, with a comment):
+  - **Phase 13** — social route dropped the literal "Social analyzer" heading
+    when it was reshaped to mirror OSINT search; still owns `social:analyze`
+    and the phase-15 `social:verify`. Pure repoint.
+  - **Phase 12** — the `"tools.wslDistro"` literal moved into
+    `src/shared/types/tools.ts` as `WSL_DISTRO_SETTING_KEY` (so the launcher
+    and the settings form share one key); the WSL-distro field itself never
+    left settings-view. Pure repoint.
+  - **Phase 11** — "Browse image" + "Search image" collapsed into one "Attach
+    image for reverse search" control (`system:pickImage` → `search:image`);
+    "Username sweep" stopped being a button because a username seed now fans
+    out through the Sherlock connector inside the unified `search:run`. Pure
+    repoint (the `search:usernameSweep` service + its test are still there).
+  - **Phase 5** — the HQ "Agents list fallback" panel became a permanently
+    mounted operations console gated by `canInitializeWebGl`; the four old
+    scene tests are covered by `agents-view.test.tsx`'s WebGL-fallback test
+    plus a new `tests/unit/camera-controls.test.ts` pinning the camera
+    contract (hint list + `focusAgentCamera`).
+  - **Phase 5, real bug** — `agents-view.tsx` hard-coded `cleanIdleStatuses:
+    true`, so the "Clean idle statuses" Settings toggle (AGENTS_WORLD.md §31)
+    wrote a value nothing read and the coarser idle lines never showed. Fixed:
+    the den now reads `agents.cleanIdleStatuses` on load, matching
+    settings-view's own default (unset = show everything).
+  - **Phase 12, real gap** — the dashboard genuinely lost its "Quick search"
+    card in the monitoring-wall redesign (REACHER_PLAN.md phase 12 lists it,
+    and the `.dashboard-quick-search` CSS was still sitting unused). Restored
+    as a compact card that hands a typed seed to `/search` via the same
+    router-state handoff analyzers-view uses for IOC pivots.
 
 - The Architect agent ran on `CodexArchitectProvider`'s string-interpolated
   output, never a real model call — the same class of bug the OSINT runtime
