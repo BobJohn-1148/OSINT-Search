@@ -35,7 +35,32 @@ quick copy change.
 
 ## Discovered, not yet actioned
 
-(none open right now)
+### The malware-analyst agent is configured but never actually runs
+`malware-analyst-agent` has a real seeded row (`agents` table, migration 018;
+provider moved to a free runtime by migration 021), a real prompt
+(`planning/agent-prompts/malware-analyst.md` — "cited observations, then a
+derived verdict," same discipline as the OSINT agent's own prompt), and it is
+selectable/configurable in Settings like every other agent. But nothing ever
+calls it: `analyzers-view.tsx`'s "Malware triage" button only invokes
+`analyzer:malware:triage`, which runs `malware-triage.ts`'s deterministic
+static pipeline (hashes, PE header, entropy, IOC extraction, an explainable
+additive risk score) and stops there. Jack can pick a provider/model for
+"Malware analyst" in Settings and reasonably believe it does something; it
+never gets invoked. Different from the OSINT/architect bug this session
+mostly fixed (those agents ran and returned fake output) — this one just
+never runs at all.
+
+Not the same shape as pattern-agent to bolt on quickly: it would need the
+static triage report turned into cited context (same citation-map discipline
+as everywhere else — hash, section, import, string, IOC as citable keys), a
+real `provider.complete()` call producing a grounded verdict, a decision on
+whether the LLM pass is automatic after every triage or a separate opt-in
+action, and where the verdict lives (a new field on the existing
+`analyzer:malware:triage` response, or its own case_items entry like
+pattern_finding). Flagged here rather than started — real feature-sized job,
+found while auditing for the same "agent configured but never really wired
+up" pattern that's been this session's throughline, not something to build
+without checking scope/intent first.
 
 ## Recently completed (context for what NOT to redo)
 
