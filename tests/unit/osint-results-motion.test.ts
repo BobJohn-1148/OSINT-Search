@@ -190,6 +190,11 @@ describe("batching and announcements", () => {
     expect(describeArrival({ ...EMPTY_DELTA, stateChanges: [{ sourceId: "s", from: "observed", to: "failed" }] })).toBe("1 source failed");
   });
 
+  it("announces a cancelled source as cancelled, never as failed", () => {
+    const delta = { ...EMPTY_DELTA, stateChanges: [{ sourceId: "s", from: "observed" as const, to: "failed" as const, cancelled: true as const }] };
+    expect(describeArrival(delta)).toBe("1 source cancelled");
+  });
+
   it("staggers a small visible set by 40 ms up to 300 ms total and leaves the rest unanimated", () => {
     const plan = staggerPlan(1000);
     expect(plan.slice(0, 3)).toEqual([0, 40, 80]);

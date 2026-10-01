@@ -262,7 +262,7 @@ export function OsintResultsTree(props: {
                 );
               }
               if (node.kind === "source") {
-                const state = node.state ?? "returned";
+                const state = node.cancelled === true ? "cancelled" : (node.state ?? "returned");
                 const activity = sourceActivity?.get(node.sourceId ?? "")?.state;
                 const toggle = stack && (node.drawnFacts ?? 0) + (node.hiddenFacts ?? 0) > 0;
                 const interactive = toggle ? { role: "button" as const, tabIndex: 0, "aria-expanded": !node.collapsed, "aria-label": `${node.collapsed ? "Expand" : "Collapse"} ${node.fullLabel} branch, ${(node.drawnFacts ?? 0) + (node.hiddenFacts ?? 0)} facts` } : { role: "img" as const, "aria-label": `Source ${node.fullLabel}` };

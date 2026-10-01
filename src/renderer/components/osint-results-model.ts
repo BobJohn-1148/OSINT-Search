@@ -31,6 +31,8 @@ export interface EvidenceFact {
 
 export interface SourceRow {
   readonly sourceId: string;
+  /** The run was stopped before this source finished. Not an error, and still never evidence of absence. */
+  readonly cancelled?: boolean;
   readonly label: string;
   readonly state: SourceState;
   readonly stateLabel: string;
@@ -48,6 +50,7 @@ export interface ResultTotals {
   readonly corroboratedFacts: number;
   readonly failedSources: number;
   readonly skippedSources: number;
+  readonly cancelledSources: number;
   readonly returnedSources: number;
   readonly partialSources: number;
   readonly totalSources: number;
@@ -210,6 +213,7 @@ export function buildSourceRows(statuses: readonly SourceStatus[], observations:
         sourceId: status.sourceId,
         label: status.label,
         state: "failed",
+        ...(cancelled ? { cancelled: true } : {}),
         stateLabel: cancelled ? "Cancelled" : timedOut ? "Timed out" : "Failed",
         count: null,
         summary: cancelled ? "Cancelled before it finished" : (status.error ?? "The source did not return"),
@@ -261,8 +265,9 @@ export function computeTotals(observations: readonly Observation[], facts: reado
     sourcesWithEvidence: new Set(observations.map((observation) => observation.source)).size,
     uniqueFacts: facts.length,
     corroboratedFacts: facts.filter((fact) => fact.corroborated).length,
-    failedSources: rows.filter((row) => row.state === "failed").length,
+    failedSources: rows.filter((row) => row.state === "failed" && row.cancelled !== true).length,
     skippedSources: rows.filter((row) => row.state === "skipped").length,
+    cancelledSources: rows.filter((row) => row.cancelled === true).length,
     returnedSources: rows.filter((row) => row.state === "returned").length,
     partialSources: rows.filter((row) => row.warning !== undefined).length,
     totalSources: rows.length

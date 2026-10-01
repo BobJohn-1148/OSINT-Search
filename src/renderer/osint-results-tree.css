@@ -96,10 +96,15 @@
   stroke-width: 1.4;
 }
 
+/* a selected fact's lines stand out, and keep their role: a primary branch stays heavier than a cross-link */
 .osr .osr-t-edge.is-active {
   stroke: var(--color-accent-strong);
   stroke-width: 2.8;
   opacity: 1;
+}
+
+.osr .osr-t-edge-cross.is-active {
+  stroke-width: 1.8;
 }
 
 /* Selecting a fact brightens its paths and dims the others slightly; their labels stay fully readable. */
@@ -132,6 +137,15 @@
 .osr .osr-t-source.is-failed circle.osr-t-dot {
   stroke: var(--color-danger);
   fill: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface-raised));
+}
+
+.osr .osr-t-source.is-cancelled circle.osr-t-dot {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 3 3;
+}
+
+.osr .osr-t-source.is-cancelled .osr-t-sub {
+  fill: var(--color-text-muted);
 }
 
 .osr .osr-t-source.is-skipped circle.osr-t-dot {

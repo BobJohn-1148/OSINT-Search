@@ -176,6 +176,11 @@
   color: var(--color-accent-strong);
 }
 
+/* the in-app Motion switch stops the spinner too (reduced motion already does, below) */
+.osr[data-motion="off"] .osr-spin {
+  animation: none;
+}
+
 .osr-spin {
   animation: osr-spin 1.1s linear infinite;
 }

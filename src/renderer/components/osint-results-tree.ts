@@ -45,6 +45,8 @@ export interface TreeNode {
   readonly drawnFacts?: number;
   readonly collapsed?: boolean;
   readonly hiddenFacts?: number;
+  /** The run was stopped before this source finished: drawn muted, never with the failure marker. */
+  readonly cancelled?: boolean;
 }
 
 export interface TreeEdge {
@@ -191,10 +193,13 @@ export function treeLayout(input: TreeInput): TreeModel {
   // Geometry
   // room for text to the right of a fact dot (its label starts 17 px past the dot)
   const labelBox = wide ? Math.min(320, Math.max(190, width * 0.36)) : Math.max(120, width - 92 - 25);
-  const seedX = wide ? 40 : 24;
+  const labelChars = Math.max(10, Math.floor((labelBox - 4) / 6.7));
+  // The seed label is centred under the root dot in the wide tree, so the root sits far enough in for a long value not to be cut
+  // at the left edge (long values are shortened to 18 characters; the full value stays in the accessible name and tooltip).
+  const seedLabel = shorten(seed.value || "seed", wide ? 18 : labelChars);
+  const seedX = wide ? Math.round(Math.max(40, Math.min(78, seedLabel.length * 3.7 + 16))) : 24;
   const factX = wide ? width - labelBox - 18 : 92;
   const sourceX = wide ? round(seedX + (factX - seedX) * 0.46) : 58;
-  const labelChars = Math.max(10, Math.floor((labelBox - 4) / 6.7));
 
   const nodes: TreeNode[] = [];
   const edges: TreeEdge[] = [];
@@ -244,7 +249,7 @@ export function treeLayout(input: TreeInput): TreeModel {
   nodes.push({
     id: "seed",
     kind: "seed",
-    label: shorten(seed.value || "seed", labelChars),
+    label: seedLabel,
     sub: seed.type,
     fullLabel: `${seed.type}: ${shorten(seed.value, 200)}`,
     x: seedX,
@@ -276,6 +281,7 @@ export function treeLayout(input: TreeInput): TreeModel {
       x: sourceX,
       y: entry.y,
       state: row.state,
+      ...(row.cancelled === true ? { cancelled: true } : {}),
       sourceId: row.sourceId,
       drawnFacts: entry.facts.length,
       collapsed: collapsed.has(row.sourceId),

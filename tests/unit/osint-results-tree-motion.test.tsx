@@ -124,6 +124,19 @@ describe("source states", () => {
     expect(count(".osr-t-fact")).toBe(1);
   });
 
+  it("shows a cancelled source muted, with no failure marker, and the run as cancelled with partial results", () => {
+    const cancelled: SourceStatus = { sourceId: "c", label: "Slow source", status: "failed", failureKind: "cancelled", observationCount: 0, error: "Cancelled" };
+    render(element([a1], [ok("dns-a"), cancelled], { phase: "complete", live: false }));
+    expect(count(".osr-t-source.is-cancelled")).toBe(1);
+    expect(count(".osr-t-source.is-failed")).toBe(0);
+    expect(count(".osr-t-source .osr-t-mark")).toBe(0);
+    expect(tree().textContent).toContain("· cancelled");
+    expect(screen.getByText("Cancelled · partial results")).toBeInTheDocument();
+    expect(screen.getByText(/1 source was cancelled before finishing/)).toBeInTheDocument();
+    // a stopped run is not a complete one
+    expect(screen.queryByText(/^Complete/)).not.toBeInTheDocument();
+  });
+
   it("marks a source that fails mid-run once, keeps its reason in the detail, and does not loop", () => {
     const view = render(element([a1], [ok("dns-a")]));
     const failed: SourceStatus = { sourceId: "site", label: "Website contacts", status: "failed", observationCount: 0, error: "Request timed out" };
@@ -245,6 +258,8 @@ describe("motion off", () => {
     expect(screen.getByRole("button", { name: "Motion off" })).toHaveAttribute("aria-pressed", "false");
     view.rerender(element([a1], [ok("dns-a")]));
     view.rerender(element([a1, b1], [ok("dns-a"), ok("dns-b")]));
+    // the spinner in the status pill listens to the same switch (CSS keys off this attribute)
+    expect(document.querySelector(".osr")).toHaveAttribute("data-motion", "off");
     expect(tree()).toHaveClass("is-motion-off");
     expect(count(".is-new")).toBe(0);
     expect(count(".osr-t-ping")).toBe(0);

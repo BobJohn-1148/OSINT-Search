@@ -594,6 +594,8 @@ describe("structure and accessibility", () => {
     // a cross-link keeps its own look on an exact match, so primary branches and cross-links never look alike
     expect(treeCss).toMatch(/\.osr-t-edge-cross\.is-matched \{[^}]*stroke: var\(--osr-cross\)/);
     expect(treeCss).toMatch(/\.osr-t-edge-branch\.is-matched[\s\S]*?\{[^}]*stroke: var\(--osr-match\)/);
+    // a selected fact's cross-link stays lighter than its primary branch
+    expect(treeCss).toMatch(/\.osr-t-edge-cross\.is-active \{[^}]*stroke-width: 1\.8/);
     // decorative motion pauses while the page is hidden (needs !important to beat the animation shorthand)
     expect(treeCss).toMatch(/is-page-hidden[^{]*\.osr-t-halo[^{]*\{[^}]*animation-play-state: paused !important/);
     // nothing loops except the halo of a thing that is really running, no ping repeats, and no blur filter runs on edges

@@ -28,7 +28,7 @@ import type { DocxTextImportResponse, DocxTextSearchResponse } from "../../share
 import type { PptxTextImportResponse, PptxTextSearchResponse } from "../../shared/schemas/pptx-text-import";
 import type { XlsxTextImportResponse, XlsxTextSearchResponse } from "../../shared/schemas/xlsx-text-import";
 import { sourceReferenceMayContainSecret, type CorpusArchiveInspectResponse, type CorpusExactSearchResponse, type CorpusImportResponse } from "../../shared/schemas/corpus-import";
-import type { Observation, SearchRunResult, SearchSeed, SearchSourcePlanItem, SeedType, SourceStatus } from "../../shared/types/search";
+import type { Observation, SearchRunResult, SearchSeed, SeedType, SourceStatus } from "../../shared/types/search";
 import { seedTypeValues } from "../../shared/types/search";
 import { entityTypeValues, type EntityType } from "../../shared/types/entity-graph";
 import { useReacherClient } from "../hooks/use-reacher-client";
@@ -57,9 +57,6 @@ export function SearchView() {
   const [liveObservations, setLiveObservations] = useState<Observation[]>([]);
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready when you are");
-  const [sourcePlan, setSourcePlan] = useState<SearchSourcePlanItem[] | null>(null);
-  const [sourcePlanStatus, setSourcePlanStatus] = useState("");
-  const sourcePlanRequest = useRef(0);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [watches, setWatches] = useState<WatchRecord[]>([]);
@@ -92,6 +89,8 @@ export function SearchView() {
   // dropped here instead of drawing (and pinging) in the current one. Source statuses carry no run id yet
   // (planning/OSINT-GRAPH-EVENT-CONTRACT.md, gap 1), so they cannot be filtered the same way.
   const activeRunRef = useRef<string | null>(null);
+  // a second click on Cancel while the first is still being answered must not change anything
+  const cancelRequestedFor = useRef<string | null>(null);
 
   useEffect(() => {
     const removeSourceListener = window.reacher.onSearchEvent("search:source-returned", (sourceStatus) => {
@@ -144,31 +143,12 @@ export function SearchView() {
   }, [refreshRails]);
 
   const activeSeed: SearchSeed = useMemo(() => ({ type: seedType, value: seedValue, ...(seedType === "parcel" && seedJurisdiction.trim() ? { jurisdiction: seedJurisdiction.trim() } : {}) }), [seedType, seedValue, seedJurisdiction]);
-  useEffect(() => {
-    sourcePlanRequest.current++;
-    setSourcePlan(null);
-    setSourcePlanStatus("");
-  }, [activeSeed]);
   const observations = useMemo(() => observationsForOutput(run, liveObservations), [liveObservations, run]);
   const selectedObservation = selectedObservationId
     ? observations.find((observation) => observation.id === selectedObservationId) ?? firstItem(observations)
     : firstItem(observations);
   const previewUrl = useMemo(() => websitePreviewUrl(run?.seed ?? activeSeed), [activeSeed, run?.seed]);
   const effectiveStatuses = run?.statuses ?? arrivals;
-
-  async function previewSources(): Promise<void> {
-    const requestId = ++sourcePlanRequest.current;
-    setSourcePlan(null);
-    setSourcePlanStatus("Checking local routing and access rules…");
-    const result = await invoke("search:preflight", { seed: activeSeed });
-    if (requestId !== sourcePlanRequest.current) return;
-    if (!result.ok) {
-      setSourcePlanStatus(result.error.message);
-      return;
-    }
-    setSourcePlan(result.value.sources);
-    setSourcePlanStatus(`${result.value.sources.filter((source) => source.disposition === "will_run").length} sources will run · ${result.value.sources.filter((source) => source.disposition === "skipped").length} skipped. Preview only; no provider was contacted.`);
-  }
 
   async function runSearch(pivotSeed?: SearchSeed): Promise<void> {
     const seed = pivotSeed ?? activeSeed;
@@ -205,9 +185,10 @@ export function SearchView() {
   }
 
   async function cancelSearch(): Promise<void> {
-    if (!activeRunId) {
+    if (!activeRunId || cancelRequestedFor.current === activeRunId) {
       return;
     }
+    cancelRequestedFor.current = activeRunId;
     const result = await invoke("search:cancel", { runId: activeRunId });
     const cancelled = result.ok && result.value.cancelled;
     setStatus(cancelled ? "Search cancelled" : "No active search to cancel");
@@ -666,18 +647,6 @@ export function SearchView() {
             <button className="composer-icon-button" type="button" aria-label="Cancel search" title="Cancel search" disabled={!activeRunId} onClick={() => void cancelSearch()}>
               <Square size={18} aria-hidden="true" />
             </button>
-          </div>
-          <div className="search-source-preflight">
-            <button className="action-button" type="button" onClick={() => void previewSources()}>Preview sources</button>
-            {sourcePlanStatus && <p className="status-text" role="status">{sourcePlanStatus}</p>}
-            {sourcePlan && <ul aria-label="Source preflight results">
-              {sourcePlan.map((source) => <li key={source.sourceId}>
-                <strong>{source.label}</strong>
-                <span>{source.disposition === "will_run" ? "Will run" : "Skipped"}</span>
-                {source.reason && <small>{source.reason}</small>}
-                {source.policy && <small>Policy · {source.policy.accessMode} · {source.policy.jurisdiction} · {source.policy.coverage} · freshness: {source.policy.freshness} · <a href={source.policy.termsUrl} target="_blank" rel="noopener noreferrer">terms</a></small>}
-              </li>)}
-            </ul>}
           </div>
           <label className="compact-field">
             Mission brief for agent handoff

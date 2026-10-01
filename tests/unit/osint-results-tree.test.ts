@@ -128,10 +128,25 @@ describe("source states", () => {
     expect(tree.nodes.filter((candidate) => candidate.kind === "fact")).toHaveLength(1);
   });
 
+  it("keeps a long seed value inside the drawing: the root sits far enough in for its centred label", () => {
+    const long = treeLayout({
+      seed: { type: "email", value: "a-very-long-address-for-testing@example.com" },
+      rows: buildSourceRows([ok("dns-a")], []),
+      facts: [],
+      selectedKey: null,
+      width: 900
+    });
+    const seedNode = long.nodes.find((candidate) => candidate.kind === "seed");
+    expect(seedNode?.label.length).toBeLessThanOrEqual(18);
+    // the centred label is about 7 px per character wide: its left edge must not pass x = 0
+    expect((seedNode?.x ?? 0) - ((seedNode?.label.length ?? 0) * 7) / 2).toBeGreaterThanOrEqual(0);
+  });
+
   it("marks a cancelled source as cancelled on its branch, not failed", () => {
     const cancelled: SourceStatus = { sourceId: "c", label: "C", status: "failed", failureKind: "cancelled", observationCount: 0, error: "Cancelled" };
     const tree = build([obs("a", "dns-a", "192.0.2.42")], [ok("dns-a"), cancelled]);
     expect(node(tree, "source:c")?.sub).toBe("· cancelled");
+    expect(node(tree, "source:c")?.cancelled).toBe(true);
     expect(tree.nodes.filter((candidate) => candidate.kind === "fact")).toHaveLength(1);
   });
 

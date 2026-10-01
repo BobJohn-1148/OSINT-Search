@@ -206,9 +206,15 @@ export function OsintResultsView(props: OsintResultsProps) {
   const announce =
     rows.length === 0
       ? ""
-      : `${totals.returnedSources} of ${totals.totalSources} sources reported${totals.failedSources > 0 ? `; ${totals.failedSources} failed` : ""}${totals.partialSources > 0 ? `; ${totals.partialSources} partial` : ""}${totals.skippedSources > 0 ? `; ${totals.skippedSources} skipped` : ""}.`;
-  const hasIncompleteSources = totals.failedSources > 0 || totals.partialSources > 0;
+      : `${totals.returnedSources} of ${totals.totalSources} sources reported${totals.failedSources > 0 ? `; ${totals.failedSources} failed` : ""}${totals.cancelledSources > 0 ? `; ${totals.cancelledSources} cancelled` : ""}${totals.partialSources > 0 ? `; ${totals.partialSources} partial` : ""}${totals.skippedSources > 0 ? `; ${totals.skippedSources} skipped` : ""}.`;
+  const hasIncompleteSources = totals.failedSources > 0 || totals.partialSources > 0 || totals.cancelledSources > 0;
   const completionDetails = [
+    totals.failedSources > 0 ? `${totals.failedSources} failed` : "",
+    totals.cancelledSources > 0 ? `${totals.cancelledSources} cancelled` : "",
+    totals.partialSources > 0 ? `${totals.partialSources} partial` : "",
+    totals.skippedSources > 0 ? `${totals.skippedSources} skipped` : ""
+  ].filter(Boolean).join(" · ");
+  const otherDetails = [
     totals.failedSources > 0 ? `${totals.failedSources} failed` : "",
     totals.partialSources > 0 ? `${totals.partialSources} partial` : "",
     totals.skippedSources > 0 ? `${totals.skippedSources} skipped` : ""
@@ -216,8 +222,11 @@ export function OsintResultsView(props: OsintResultsProps) {
   const statePill =
     phase === "running"
       ? { tone: "running", text: "Running" }
-      : phase === "complete"
-        ? { tone: hasIncompleteSources ? "partial" : "complete", text: completionDetails ? `Complete · ${completionDetails}` : "Complete" }
+      : phase === "complete" && totals.cancelledSources > 0
+        ? // a stopped run is not a complete one, even when the stop arrives as a result
+          { tone: "partial", text: `Cancelled · partial results${otherDetails ? ` · ${otherDetails}` : ""}` }
+        : phase === "complete"
+          ? { tone: hasIncompleteSources ? "partial" : "complete", text: completionDetails ? `Complete · ${completionDetails}` : "Complete" }
         : { tone: "idle", text: "Not started" };
   const duration = runDurationLabel(run?.startedTs ?? null, run?.completedTs ?? null);
 
@@ -237,7 +246,7 @@ export function OsintResultsView(props: OsintResultsProps) {
   );
 
   return (
-    <section className="osr" aria-labelledby="osr-title" ref={rootRef}>
+    <section className="osr" aria-labelledby="osr-title" ref={rootRef} data-motion={motion.motionOn ? "on" : "off"}>
       <header className="osr-head">
         <div>
           <p className="osr-eyebrow">Investigation results</p>
@@ -284,6 +293,7 @@ export function OsintResultsView(props: OsintResultsProps) {
           <AlertTriangle size={15} aria-hidden="true" />
           <span>
             {totals.failedSources > 0 ? `${totals.failedSources} of ${totals.totalSources} sources did not return. ` : ""}
+            {totals.cancelledSources > 0 ? `${totals.cancelledSources} source${totals.cancelledSources === 1 ? " was" : "s were"} cancelled before finishing. ` : ""}
             {totals.partialSources > 0 ? `${totals.partialSources} source${totals.partialSources === 1 ? " has" : "s have"} incomplete results. ` : ""}
             Evidence from other sources is kept below. A failed or partial source is not evidence that the seed is absent or safe.
           </span>
@@ -299,7 +309,7 @@ export function OsintResultsView(props: OsintResultsProps) {
             <Metric label="Observations" value={totals.observations} note={`across ${totals.sourcesWithEvidence} source${totals.sourcesWithEvidence === 1 ? "" : "s"}`} />
             <Metric label="Unique facts" value={totals.uniqueFacts} note="exact entity, type and value" />
             <Metric label="Cross-referenced" value={totals.corroboratedFacts} note="same fact, 2+ declared upstream families" />
-            <Metric label="Not returned" value={totals.failedSources + totals.skippedSources} note={`${totals.failedSources} failed · ${totals.skippedSources} skipped`} />
+            <Metric label="Not returned" value={totals.failedSources + totals.cancelledSources + totals.skippedSources} note={`${totals.failedSources} failed${totals.cancelledSources > 0 ? ` · ${totals.cancelledSources} cancelled` : ""} · ${totals.skippedSources} skipped`} />
           </section>
 
           <div className="osr-grid">

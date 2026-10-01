@@ -130,6 +130,19 @@ describe("source rows", () => {
     expect(row?.detail).toMatch(/does not show that the seed is absent or safe/);
   });
 
+  it("counts a cancelled source as cancelled, not failed, in the totals", () => {
+    const rows = buildSourceRows(
+      [
+        { sourceId: "c", label: "C", status: "failed", failureKind: "cancelled", observationCount: 0, error: "Cancelled" },
+        { sourceId: "t", label: "T", status: "failed", observationCount: 0, error: "Request timed out" }
+      ],
+      []
+    );
+    const totals = computeTotals([], [], rows);
+    expect(totals.cancelledSources).toBe(1);
+    expect(totals.failedSources).toBe(1);
+  });
+
   it("labels a non-timeout failure plainly as Failed", () => {
     const row = buildSourceRows([{ sourceId: "x", label: "X", status: "failed", observationCount: 0, error: "HTTP 503" }], []).at(0);
     expect(row?.stateLabel).toBe("Failed");

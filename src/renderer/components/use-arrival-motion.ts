@@ -71,6 +71,7 @@ interface Pending {
   readonly facts: number;
   readonly matches: number;
   readonly failed: number;
+  readonly cancelled: number;
 }
 
 interface Tracked {
@@ -136,7 +137,7 @@ function mergeRecent(previous: RecentArrivals, delta: ArrivalDelta, token: numbe
     }
   }
   for (const change of delta.stateChanges) {
-    if (change.to === "failed") {
+    if (change.to === "failed" && change.cancelled !== true) {
       failed.add(change.sourceId);
     }
   }
@@ -150,19 +151,20 @@ function advance(previous: Tracked, facts: readonly EvidenceFact[], rows: readon
   const base = { facts, rows, runKey, live, motionOn, state };
   if (newRun) {
     // a new run: nothing from the previous run may still be pinging or waiting to be announced
-    return { ...base, recent: NONE, token: previous.token, batch: previous.batch + 1, pending: { facts: 0, matches: 0, failed: 0 }, latestText: "", announcement: "" };
+    return { ...base, recent: NONE, token: previous.token, batch: previous.batch + 1, pending: { facts: 0, matches: 0, failed: 0, cancelled: 0 }, latestText: "", announcement: "" };
   }
   if (isEmptyDelta(delta)) {
     return { ...previous, ...base, recent: motionOn ? previous.recent : NONE };
   }
   const token = previous.token + 1;
-  const failed = delta.stateChanges.filter((change) => change.to === "failed").length;
+  const failed = delta.stateChanges.filter((change) => change.to === "failed" && change.cancelled !== true).length;
+  const cancelled = delta.stateChanges.filter((change) => change.cancelled === true).length;
   return {
     ...base,
     recent: motionOn ? mergeRecent(previous.recent, delta, token) : NONE,
     token,
     batch: previous.batch + 1,
-    pending: { facts: previous.pending.facts + delta.newFactKeys.length, matches: previous.pending.matches + delta.matches.length, failed: previous.pending.failed + failed },
+    pending: { facts: previous.pending.facts + delta.newFactKeys.length, matches: previous.pending.matches + delta.matches.length, failed: previous.pending.failed + failed, cancelled: previous.pending.cancelled + cancelled },
     latestText: previous.latestText,
     announcement: previous.announcement
   };
@@ -214,7 +216,7 @@ export function useArrivalMotion(args: {
     recent: NONE,
     token: 0,
     batch: 0,
-    pending: { facts: 0, matches: 0, failed: 0 },
+    pending: { facts: 0, matches: 0, failed: 0, cancelled: 0 },
     latestText: "",
     announcement: ""
   }));
@@ -238,8 +240,8 @@ export function useArrivalMotion(args: {
         if (previous.batch !== batch) {
           return previous;
         }
-        const text = describeCounts(previous.pending.facts, previous.pending.matches, previous.pending.failed);
-        const cleared = { facts: 0, matches: 0, failed: 0 };
+        const text = describeCounts(previous.pending.facts, previous.pending.matches, previous.pending.failed, previous.pending.cancelled);
+        const cleared = { facts: 0, matches: 0, failed: 0, cancelled: 0 };
         return text ? { ...previous, pending: cleared, announcement: text, latestText: text } : { ...previous, pending: cleared };
       });
     }, ANNOUNCE_QUIET_MS);

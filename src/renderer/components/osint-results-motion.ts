@@ -59,7 +59,7 @@ export interface ArrivalDelta {
   readonly newEdgeIds: readonly string[];
   readonly newSourceIds: readonly string[];
   readonly matches: readonly MatchEvent[];
-  readonly stateChanges: readonly { readonly sourceId: string; readonly from: SourceState | null; readonly to: SourceState }[];
+  readonly stateChanges: readonly { readonly sourceId: string; readonly from: SourceState | null; readonly to: SourceState; readonly cancelled?: true }[];
 }
 
 export const EMPTY_DELTA: ArrivalDelta = { newFactKeys: [], newEdgeIds: [], newSourceIds: [], matches: [], stateChanges: [] };
@@ -124,12 +124,12 @@ export function diffArrivals(
   const newSourceIds = rows.filter((row) => !previous.sourceStates.has(row.sourceId)).map((row) => row.sourceId);
   const stateChanges = rows
     .filter((row) => previous.sourceStates.get(row.sourceId) !== row.state)
-    .map((row) => ({ sourceId: row.sourceId, from: previous.sourceStates.get(row.sourceId) ?? null, to: row.state }));
+    .map((row) => ({ sourceId: row.sourceId, from: previous.sourceStates.get(row.sourceId) ?? null, to: row.state, ...(row.cancelled === true ? { cancelled: true as const } : {}) }));
   return { state: next, delta: { newFactKeys, newEdgeIds, newSourceIds, matches, stateChanges } };
 }
 
 /** The short polite announcement for a batch of counts, e.g. "3 new facts; 1 new exact match". Empty when nothing arrived. */
-export function describeCounts(facts: number, matches: number, failedSources: number): string {
+export function describeCounts(facts: number, matches: number, failedSources: number, cancelledSources = 0): string {
   const parts: string[] = [];
   if (facts > 0) {
     parts.push(`${facts} new fact${facts === 1 ? "" : "s"}`);
@@ -140,11 +140,19 @@ export function describeCounts(facts: number, matches: number, failedSources: nu
   if (failedSources > 0) {
     parts.push(`${failedSources} source${failedSources === 1 ? "" : "s"} failed`);
   }
+  if (cancelledSources > 0) {
+    parts.push(`${cancelledSources} source${cancelledSources === 1 ? "" : "s"} cancelled`);
+  }
   return parts.join("; ");
 }
 
 export function describeArrival(delta: ArrivalDelta): string {
-  return describeCounts(delta.newFactKeys.length, delta.matches.length, delta.stateChanges.filter((change) => change.to === "failed").length);
+  return describeCounts(
+    delta.newFactKeys.length,
+    delta.matches.length,
+    delta.stateChanges.filter((change) => change.to === "failed" && change.cancelled !== true).length,
+    delta.stateChanges.filter((change) => change.cancelled === true).length
+  );
 }
 
 /**
