@@ -65,6 +65,8 @@ export interface OsintResultsProps {
   readonly live?: boolean;
   /** Per-source lifecycle, supplied only when the backend really reports it (see planning/OSINT-GRAPH-EVENT-CONTRACT.md). */
   readonly sourceActivity?: ReadonlyMap<string, SourceLifecycle>;
+  /** The caller knows the person cancelled this run (the cancel was accepted), even if no source reported being cancelled. */
+  readonly cancelled?: boolean;
   /** "reduced" forces static rendering (the in-app switch and prefers-reduced-motion are always honoured as well). */
   readonly motionPolicy?: MotionPolicy;
 }
@@ -105,7 +107,7 @@ function rawString(observation: Observation, key: string): string | null {
 }
 
 export function OsintResultsView(props: OsintResultsProps) {
-  const { seed, run, phase, effort, statuses, observations, selectedObservationId, onSelectObservation, assessment, detailActions, demoLabel, runKey, live, sourceActivity, motionPolicy } = props;
+  const { seed, run, phase, effort, statuses, observations, selectedObservationId, onSelectObservation, assessment, detailActions, demoLabel, runKey, live, sourceActivity, motionPolicy, cancelled: cancelAccepted } = props;
   const [filter, setFilter] = useState<EvidenceFilter>("all");
   const [text, setText] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
@@ -222,7 +224,7 @@ export function OsintResultsView(props: OsintResultsProps) {
   const statePill =
     phase === "running"
       ? { tone: "running", text: "Running" }
-      : phase === "complete" && totals.cancelledSources > 0
+      : phase === "complete" && (totals.cancelledSources > 0 || cancelAccepted === true)
         ? // a stopped run is not a complete one, even when the stop arrives as a result
           { tone: "partial", text: `Cancelled · partial results${otherDetails ? ` · ${otherDetails}` : ""}` }
         : phase === "complete"
@@ -453,8 +455,8 @@ function SourceActivity(props: { readonly rows: readonly SourceRow[] }) {
                 <strong>{row.label}</strong>
                 <span>{row.summary}</span>
               </div>
-              <span className={`osr-source-state osr-source-state-${row.state}${row.warning ? " is-partial" : ""}`}>
-                {row.state === "failed" || row.warning ? <AlertTriangle size={13} aria-hidden="true" /> : row.state === "skipped" ? <Ban size={13} aria-hidden="true" /> : row.state === "returned" ? <Check size={13} aria-hidden="true" /> : <Loader size={13} aria-hidden="true" />}
+              <span className={`osr-source-state osr-source-state-${row.cancelled === true ? "cancelled" : row.state}${row.warning ? " is-partial" : ""}`}>
+                {row.cancelled === true ? <Ban size={13} aria-hidden="true" /> : row.state === "failed" || row.warning ? <AlertTriangle size={13} aria-hidden="true" /> : row.state === "skipped" ? <Ban size={13} aria-hidden="true" /> : row.state === "returned" ? <Check size={13} aria-hidden="true" /> : <Loader size={13} aria-hidden="true" />}
                 {row.stateLabel}
               </span>
               <span className="osr-source-count" aria-label={row.count === null ? "No count" : `${row.count} observations`}>

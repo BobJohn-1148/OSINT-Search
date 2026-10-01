@@ -426,6 +426,11 @@
   color: var(--color-warning);
 }
 
+/* a cancelled source was stopped, not broken: muted, with its own icon */
+.osr-source-state-cancelled {
+  color: var(--color-text-muted);
+}
+
 .osr-source-state-skipped {
   color: var(--color-text-muted);
 }

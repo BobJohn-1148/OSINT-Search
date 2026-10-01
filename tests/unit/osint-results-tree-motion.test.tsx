@@ -137,6 +137,20 @@ describe("source states", () => {
     expect(screen.queryByText(/^Complete/)).not.toBeInTheDocument();
   });
 
+  it("reads a run the caller knows was cancelled as cancelled even when no source reported being cancelled", () => {
+    render(element([a1], [ok("dns-a")], { phase: "complete", live: false, cancelled: true }));
+    expect(screen.getByText("Cancelled · partial results")).toBeInTheDocument();
+    expect(screen.queryByText(/^Complete/)).not.toBeInTheDocument();
+  });
+
+  it("lists a cancelled source with the muted cancelled style, a stop icon and the cancelled note on the not-returned metric", () => {
+    const cancelled: SourceStatus = { sourceId: "c", label: "Slow source", status: "failed", failureKind: "cancelled", observationCount: 0, error: "Cancelled" };
+    render(element([a1], [ok("dns-a"), cancelled], { phase: "complete", live: false }));
+    const sources = screen.getByRole("region", { name: "Source activity" });
+    expect(within(sources).getByText("Cancelled").className).toContain("osr-source-state-cancelled");
+    expect(within(screen.getByRole("region", { name: "Evidence totals" })).getByText(/1 cancelled/)).toBeInTheDocument();
+  });
+
   it("marks a source that fails mid-run once, keeps its reason in the detail, and does not loop", () => {
     const view = render(element([a1], [ok("dns-a")]));
     const failed: SourceStatus = { sourceId: "site", label: "Website contacts", status: "failed", observationCount: 0, error: "Request timed out" };

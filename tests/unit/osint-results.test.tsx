@@ -594,6 +594,8 @@ describe("structure and accessibility", () => {
     // a cross-link keeps its own look on an exact match, so primary branches and cross-links never look alike
     expect(treeCss).toMatch(/\.osr-t-edge-cross\.is-matched \{[^}]*stroke: var\(--osr-cross\)/);
     expect(treeCss).toMatch(/\.osr-t-edge-branch\.is-matched[\s\S]*?\{[^}]*stroke: var\(--osr-match\)/);
+    // the in-app Motion switch stops the status spinner as well (the view sets data-motion on its root)
+    expect(css).toMatch(/\.osr\[data-motion="off"\] \.osr-spin \{\s*animation: none/);
     // a selected fact's cross-link stays lighter than its primary branch
     expect(treeCss).toMatch(/\.osr-t-edge-cross\.is-active \{[^}]*stroke-width: 1\.8/);
     // decorative motion pauses while the page is hidden (needs !important to beat the animation shorthand)

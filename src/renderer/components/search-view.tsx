@@ -91,6 +91,8 @@ export function SearchView() {
   const activeRunRef = useRef<string | null>(null);
   // a second click on Cancel while the first is still being answered must not change anything
   const cancelRequestedFor = useRef<string | null>(null);
+  // the run id whose cancel was accepted: the results show it as cancelled even when no source reported being cancelled
+  const [cancelledRunId, setCancelledRunId] = useState<string | null>(null);
 
   useEffect(() => {
     const removeSourceListener = window.reacher.onSearchEvent("search:source-returned", (sourceStatus) => {
@@ -100,7 +102,7 @@ export function SearchView() {
       const own = activeRunRef.current;
       const current = own === null ? observations : observations.filter((observation) => observation.runId === own);
       if (current.length > 0) {
-        setLiveObservations((previous) => [...previous, ...current].slice(-500));
+        setLiveObservations((previous) => [...previous, ...current].slice(-5000));
       }
     });
 
@@ -180,7 +182,7 @@ export function SearchView() {
 
     setRun(result.value.run);
     setSelectedObservationId(result.value.run.observations[0]?.id ?? null);
-    setStatus(`Search complete with ${result.value.run.observations.length} observations`);
+    setStatus(cancelRequestedFor.current === runId ? `Search cancelled; ${result.value.run.observations.length} observations kept` : `Search complete with ${result.value.run.observations.length} observations`);
     await refreshRails();
   }
 
@@ -191,6 +193,9 @@ export function SearchView() {
     cancelRequestedFor.current = activeRunId;
     const result = await invoke("search:cancel", { runId: activeRunId });
     const cancelled = result.ok && result.value.cancelled;
+    if (cancelled) {
+      setCancelledRunId(activeRunId);
+    }
     setStatus(cancelled ? "Search cancelled" : "No active search to cancel");
     // A cancelled run keeps showing as running until its own result arrives (runSearch clears it then), so the tree does not
     // flash back to "not started" in between and then show partial evidence as if it were a fresh state.
@@ -682,6 +687,7 @@ export function SearchView() {
           run={run}
           phase={activeRunId ? "running" : run ? "complete" : "idle"}
           runKey={activeRunId ?? run?.runId ?? null}
+          cancelled={cancelledRunId !== null && cancelledRunId === (run?.runId ?? activeRunId)}
           effort={effortLabel(effort)}
           statuses={effectiveStatuses}
           observations={observations}
