@@ -1,0 +1,514 @@
+/*
+ * Styles for the animated investigation tree. Everything hangs off `.osr`, and every colour is a theme token (the glow
+ * and halo colours are mixes of those tokens, declared once below), so nothing here can restyle the rest of the app
+ * and the renderer's raw-colour audit still holds.
+ *
+ * Motion is built from three things only: opacity, transforms and a bounded stroke-dash draw. No blur filter runs on
+ * edges; the only filter is a small drop-shadow on the handful of exact-match nodes. Every loop is tied to a real
+ * state (a run that is running, a source that is running) and ends with it, nothing loops after completion, and the
+ * whole layer is switched off by the in-app motion toggle (`.is-motion-off`), by prefers-reduced-motion, and while the
+ * page is hidden. Meaning never depends on motion: a match keeps a permanent outline and a text badge, a failure keeps
+ * its marker and its words, so a person who sees no animation loses nothing but the pings.
+ *
+ * Timing values are the named tokens below. They are mirrored in osint-results-motion.ts (MOTION) and a test compares
+ * the two, so tuning one without the other fails.
+ */
+.osr {
+  --osr-t-root-in: 220ms;
+  --osr-t-source-cycle: 1800ms;
+  --osr-t-edge-draw: 320ms;
+  --osr-t-node-in: 180ms;
+  --osr-t-match-ping: 700ms;
+  --osr-t-select: 120ms;
+  --osr-t-source-fail: 180ms;
+  --osr-t-settle: 200ms;
+  --osr-t-layout: 220ms;
+  --osr-ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --osr-ease-settle: cubic-bezier(0.4, 0, 0.2, 1);
+  --osr-match: var(--color-positive);
+  --osr-match-glow: color-mix(in srgb, var(--color-positive) 55%, var(--color-transparent));
+  --osr-match-soft: color-mix(in srgb, var(--color-positive) 16%, var(--color-transparent));
+  --osr-halo: color-mix(in srgb, var(--color-accent) 45%, var(--color-transparent));
+  --osr-select-glow: color-mix(in srgb, var(--color-accent-strong) 50%, var(--color-transparent));
+  --osr-branch: var(--color-border-strong);
+  --osr-trunk: var(--color-accent-border);
+  --osr-cross: color-mix(in srgb, var(--color-positive) 62%, var(--color-text-muted));
+  --osr-row-pad: 8px;
+}
+
+/* ---------------------------------------------------------------- the drawing */
+.osr .osr-tree {
+  display: block;
+  width: 100%;
+  border-radius: 8px;
+  background: radial-gradient(ellipse at 12% 50%, var(--color-accent-surface), var(--color-transparent) 55%), var(--color-app);
+  cursor: grab;
+  user-select: none;
+  /* vertical swipes belong to the page: the tree must never be a scroll trap on a phone */
+  touch-action: pan-y pinch-zoom;
+}
+
+.osr .osr-tree:active {
+  cursor: grabbing;
+}
+
+.osr .osr-t-edge {
+  fill: none;
+  stroke-linecap: round;
+  transition:
+    opacity var(--osr-t-select) var(--osr-ease-settle),
+    stroke var(--osr-t-select) var(--osr-ease-settle),
+    stroke-width var(--osr-t-select) var(--osr-ease-settle);
+}
+
+.osr .osr-t-edge-trunk {
+  stroke: var(--osr-trunk);
+  stroke-width: 2;
+}
+
+.osr .osr-t-edge-branch {
+  stroke: var(--osr-branch);
+  stroke-width: 1.6;
+}
+
+/* A cross-link is another source returning the same exact fact: a thinner, longer, differently coloured path, never dashed. */
+.osr .osr-t-edge-cross {
+  stroke: var(--osr-cross);
+  stroke-width: 1.4;
+}
+
+/* Candidate associations (future typed assertions) are the only dashed lines, and always carry the word "Candidate". */
+.osr .osr-t-edge-candidate {
+  stroke: var(--color-warning);
+  stroke-width: 1.6;
+  stroke-dasharray: 6 4;
+}
+
+.osr .osr-t-edge-branch.is-matched,
+.osr .osr-t-edge-trunk.is-matched {
+  stroke: var(--osr-match);
+  stroke-width: 2;
+}
+
+/* ...but a cross-link stays a cross-link on a match: thinner and muted, so primary branches and cross-links never look alike */
+.osr .osr-t-edge-cross.is-matched {
+  stroke: var(--osr-cross);
+  stroke-width: 1.4;
+}
+
+.osr .osr-t-edge.is-active {
+  stroke: var(--color-accent-strong);
+  stroke-width: 2.8;
+  opacity: 1;
+}
+
+/* Selecting a fact brightens its paths and dims the others slightly; their labels stay fully readable. */
+.osr .osr-tree.has-selection .osr-t-edge:not(.is-active) {
+  opacity: 0.4;
+}
+
+/* ---------------------------------------------------------------- nodes */
+.osr .osr-t-node {
+  transition: transform var(--osr-t-layout) var(--osr-ease-settle);
+}
+
+.osr .osr-t-body {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.osr .osr-t-seed circle.osr-t-dot {
+  fill: var(--color-accent-surface);
+  stroke: var(--color-accent-strong);
+  stroke-width: 2.6;
+}
+
+.osr .osr-t-source circle.osr-t-dot {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-positive);
+  stroke-width: 2;
+}
+
+.osr .osr-t-source.is-failed circle.osr-t-dot {
+  stroke: var(--color-danger);
+  fill: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface-raised));
+}
+
+.osr .osr-t-source.is-skipped circle.osr-t-dot {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 3 3;
+}
+
+.osr .osr-t-source.is-observed circle.osr-t-dot {
+  stroke: var(--color-accent-strong);
+}
+
+/* planned but not started: a muted marker only, supplied by a real lifecycle event */
+.osr .osr-t-source.is-queued circle.osr-t-dot {
+  stroke: var(--color-text-muted);
+  stroke-dasharray: 2 3;
+  fill: var(--color-surface);
+}
+
+.osr .osr-t-source.is-queued .osr-t-label,
+.osr .osr-t-source.is-queued .osr-t-sub {
+  fill: var(--color-text-muted);
+}
+
+.osr .osr-t-empty {
+  margin: 0;
+  padding: 10px 4px 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.osr .osr-t-mark {
+  fill: var(--color-danger);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.osr .osr-t-fact circle.osr-t-dot {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-text-muted);
+  stroke-width: 1.6;
+}
+
+/* An exact match keeps a bright outline, a soft halo and a text badge for good; the ping only draws the eye to it once. */
+.osr .osr-t-fact.is-matched circle.osr-t-dot {
+  fill: var(--osr-match-soft);
+  stroke: var(--osr-match);
+  stroke-width: 2.6;
+}
+
+.osr .osr-t-fact.is-matched .osr-t-body {
+  filter: drop-shadow(0 0 4px var(--osr-match-glow));
+}
+
+.osr .osr-t-fact.is-discovery circle.osr-t-dot {
+  stroke-dasharray: 2 2;
+}
+
+.osr .osr-t-fact.is-selected circle.osr-t-dot {
+  stroke: var(--color-accent-strong);
+  stroke-width: 3.2;
+  fill: var(--color-accent-surface);
+}
+
+.osr .osr-t-fact.is-selected .osr-t-body {
+  filter: drop-shadow(0 0 5px var(--osr-select-glow));
+}
+
+.osr .osr-t-focus {
+  fill: none;
+  stroke: var(--color-text);
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.osr .osr-t-node:focus-visible {
+  outline: none;
+}
+
+.osr .osr-t-node:focus-visible .osr-t-focus {
+  opacity: 1;
+}
+
+.osr .osr-t-hit {
+  fill: var(--color-transparent);
+  stroke: none;
+}
+
+.osr .osr-t-label {
+  fill: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  paint-order: stroke;
+  stroke: var(--color-app);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.osr .osr-t-label-strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.osr .osr-t-sub {
+  fill: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  paint-order: stroke;
+  stroke: var(--color-app);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.osr .osr-t-fact.is-matched .osr-t-sub {
+  fill: var(--osr-match);
+  font-weight: 650;
+}
+
+.osr .osr-t-source.is-failed .osr-t-sub {
+  fill: var(--color-danger);
+  font-weight: 650;
+}
+
+.osr .osr-t-more .osr-t-label {
+  fill: var(--color-accent-strong);
+  font-weight: 650;
+}
+
+.osr .osr-t-more circle.osr-t-dot {
+  fill: var(--color-surface-raised);
+  stroke: var(--color-accent-border);
+  stroke-width: 1.6;
+}
+
+.osr .osr-t-toggle {
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- arrival and match animation */
+.osr .osr-t-ping {
+  fill: none;
+  stroke: var(--osr-match);
+  stroke-width: 3;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.osr .osr-t-edge-ping {
+  fill: none;
+  stroke: var(--osr-match);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.osr .osr-t-halo {
+  fill: none;
+  stroke: var(--osr-halo);
+  stroke-width: 2;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  pointer-events: none;
+}
+
+.osr .osr-tree.is-motion-on .osr-t-seed.is-entering .osr-t-body {
+  animation: osr-root-in var(--osr-t-root-in) var(--osr-ease-arrive) backwards;
+}
+
+/* a new branch is drawn from its parent, then its leaf is revealed */
+.osr .osr-tree.is-motion-on .osr-t-edge.is-new {
+  stroke-dasharray: 1;
+  animation: osr-edge-draw var(--osr-t-edge-draw) var(--osr-ease-arrive) var(--osr-delay, 0ms) backwards;
+}
+
+.osr .osr-tree.is-motion-on .osr-t-node.is-new .osr-t-body {
+  animation: osr-node-in var(--osr-t-node-in) var(--osr-ease-arrive) calc(var(--osr-delay, 0ms) + var(--osr-t-edge-draw) * 0.6) backwards;
+}
+
+.osr .osr-tree.is-motion-on .osr-t-ping {
+  animation: osr-ping var(--osr-t-match-ping) var(--osr-ease-arrive) var(--osr-delay, 0ms) forwards;
+}
+
+.osr .osr-tree.is-motion-on .osr-t-edge-ping {
+  animation: osr-edge-ping var(--osr-t-match-ping) var(--osr-ease-settle) var(--osr-delay, 0ms) forwards;
+}
+
+.osr .osr-tree.is-motion-on .osr-t-source.is-just-failed .osr-t-body {
+  animation: osr-fail-in var(--osr-t-source-fail) var(--osr-ease-arrive) backwards;
+}
+
+/* ongoing loading motion exists only while the thing it describes is actually running */
+.osr .osr-tree.is-motion-on .osr-t-seed.is-running .osr-t-halo,
+.osr .osr-tree.is-motion-on .osr-t-source.is-running .osr-t-halo {
+  animation: osr-halo var(--osr-t-source-cycle) ease-out infinite;
+}
+
+.osr .osr-tree.is-page-hidden .osr-t-seed .osr-t-halo,
+.osr .osr-tree.is-page-hidden .osr-t-source .osr-t-halo {
+  animation-play-state: paused !important;
+}
+
+@keyframes osr-root-in {
+  from {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes osr-edge-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes osr-node-in {
+  from {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes osr-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(0.8);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+
+@keyframes osr-edge-ping {
+  0% {
+    opacity: 0.95;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes osr-halo {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+}
+
+@keyframes osr-fail-in {
+  from {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The in-app switch and the system setting both leave a fully readable, static tree: permanent match styling, text badges and arrival text remain. */
+.osr .osr-tree.is-motion-off *,
+.osr .osr-tree.is-motion-off {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osr .osr-tree *,
+  .osr .osr-tree {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------- chrome around the tree */
+.osr .osr-t-arrival {
+  margin: 0;
+  padding: 6px 16px 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.osr .osr-t-arrival strong {
+  color: var(--color-text);
+  font-weight: 650;
+}
+
+.osr .osr-t-legend {
+  display: flex;
+  gap: 6px 16px;
+  flex-wrap: wrap;
+  padding: 6px 16px 12px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.osr .osr-t-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.osr .osr-t-key {
+  display: inline-block;
+  width: 22px;
+  height: 0;
+  border-top: 2px solid var(--osr-trunk);
+}
+
+.osr .osr-t-key-branch {
+  border-top-color: var(--osr-branch);
+  border-top-width: 1.6px;
+}
+
+.osr .osr-t-key-cross {
+  border-top-color: var(--osr-cross);
+  border-top-width: 1.4px;
+}
+
+.osr .osr-t-key-branch.is-match {
+  border-top-color: var(--osr-match);
+  border-top-width: 2px;
+}
+
+.osr .osr-t-key-candidate {
+  border-top: 2px dashed var(--color-warning);
+}
+
+.osr .osr-t-dotkey {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--color-text-muted);
+  border-radius: 50%;
+}
+
+.osr .osr-t-dotkey-match {
+  border-color: var(--osr-match);
+  background: var(--osr-match-soft);
+  box-shadow: 0 0 5px var(--osr-match-glow);
+}
+
+.osr .osr-t-dotkey-failed {
+  border-color: var(--color-danger);
+}
+
+.osr .osr-t-more-button {
+  margin: 0 16px 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .osr .osr-t-more-button {
+    transition: none;
+  }
+}

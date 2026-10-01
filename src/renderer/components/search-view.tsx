@@ -6,6 +6,8 @@
 import {
   Bot,
   Briefcase,
+  Database,
+  FileUp,
   FolderOpen,
   GitBranch,
   Globe,
@@ -17,13 +19,21 @@ import {
   Square,
   Users
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentRecord } from "../../shared/schemas/agents";
 import type { CaseRecord } from "../../shared/schemas/cases";
 import type { MonitoringAlert, WatchRecord } from "../../shared/schemas/monitoring";
-import type { Observation, SearchRunResult, SearchSeed, SearchTreeNode, SeedType, SourceStatus, StrengthBand } from "../../shared/types/search";
+import type { PdfTextImportResponse, PdfTextSearchResponse } from "../../shared/schemas/pdf-text-import";
+import type { DocxTextImportResponse, DocxTextSearchResponse } from "../../shared/schemas/docx-text-import";
+import type { PptxTextImportResponse, PptxTextSearchResponse } from "../../shared/schemas/pptx-text-import";
+import type { XlsxTextImportResponse, XlsxTextSearchResponse } from "../../shared/schemas/xlsx-text-import";
+import { sourceReferenceMayContainSecret, type CorpusArchiveInspectResponse, type CorpusExactSearchResponse, type CorpusImportResponse } from "../../shared/schemas/corpus-import";
+import type { Observation, SearchRunResult, SearchSeed, SearchSourcePlanItem, SeedType, SourceStatus } from "../../shared/types/search";
 import { seedTypeValues } from "../../shared/types/search";
+import { entityTypeValues, type EntityType } from "../../shared/types/entity-graph";
 import { useReacherClient } from "../hooks/use-reacher-client";
+import { observationsForOutput } from "./osint-results-model";
+import { OsintResultsView, type OsintAssessment } from "./osint-results-view";
 
 type SearchEffort = "low" | "standard" | "deep";
 
@@ -37,6 +47,7 @@ export function SearchView() {
   const { invoke } = useReacherClient();
   const [seedType, setSeedType] = useState<SeedType>("domain");
   const [seedValue, setSeedValue] = useState("example.com");
+  const [seedJurisdiction, setSeedJurisdiction] = useState("");
   const [effort, setEffort] = useState<SearchEffort>("standard");
   const [imagePath, setImagePath] = useState("C:\\images\\subject.png");
   const [username, setUsername] = useState("jdoe");
@@ -46,19 +57,52 @@ export function SearchView() {
   const [liveObservations, setLiveObservations] = useState<Observation[]>([]);
   const [selectedObservationId, setSelectedObservationId] = useState<string | null>(null);
   const [status, setStatus] = useState("Ready when you are");
+  const [sourcePlan, setSourcePlan] = useState<SearchSourcePlanItem[] | null>(null);
+  const [sourcePlanStatus, setSourcePlanStatus] = useState("");
+  const sourcePlanRequest = useRef(0);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [cases, setCases] = useState<CaseRecord[]>([]);
   const [watches, setWatches] = useState<WatchRecord[]>([]);
   const [alerts, setAlerts] = useState<MonitoringAlert[]>([]);
   const [agents, setAgents] = useState<AgentRecord[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState("osint-agent");
+  const [graphEntityType, setGraphEntityType] = useState<EntityType>("unknown");
+  const [graphEntityLabel, setGraphEntityLabel] = useState("");
+  const [assessment, setAssessment] = useState<OsintAssessment | null>(null);
+  const [corpusAccessBasis, setCorpusAccessBasis] = useState<"public" | "authorized">("public");
+  const [corpusSourceName, setCorpusSourceName] = useState("");
+  const [corpusSourceUrl, setCorpusSourceUrl] = useState("");
+  const [corpusSourceDate, setCorpusSourceDate] = useState("");
+  const [corpusIdentifierType, setCorpusIdentifierType] = useState("uei");
+  const [corpusIdentifierField, setCorpusIdentifierField] = useState("uei");
+  const [corpusLookupValue, setCorpusLookupValue] = useState("");
+  const [corpusResults, setCorpusResults] = useState<CorpusExactSearchResponse["results"]>([]);
+  const [pdfTextQuery, setPdfTextQuery] = useState("");
+  const [pdfTextResults, setPdfTextResults] = useState<PdfTextSearchResponse["results"]>([]);
+  const [docxTextQuery, setDocxTextQuery] = useState("");
+  const [docxTextResults, setDocxTextResults] = useState<DocxTextSearchResponse["results"]>([]);
+  const [pptxTextQuery, setPptxTextQuery] = useState("");
+  const [pptxTextResults, setPptxTextResults] = useState<PptxTextSearchResponse["results"]>([]);
+  const [xlsxTextQuery, setXlsxTextQuery] = useState("");
+  const [xlsxTextResults, setXlsxTextResults] = useState<XlsxTextSearchResponse["results"]>([]);
+  const [archiveInspection, setArchiveInspection] = useState<Extract<CorpusArchiveInspectResponse, { sessionToken: string }> | null>(null);
+  const [archiveEntryIndex, setArchiveEntryIndex] = useState<number | null>(null);
+  const [corpusStatus, setCorpusStatus] = useState("Imports stay on this computer and are searched by exact identifier.");
+  // The run this view started. Observation batches carry their run id, so a late batch from an earlier or cancelled run is
+  // dropped here instead of drawing (and pinging) in the current one. Source statuses carry no run id yet
+  // (planning/OSINT-GRAPH-EVENT-CONTRACT.md, gap 1), so they cannot be filtered the same way.
+  const activeRunRef = useRef<string | null>(null);
 
   useEffect(() => {
     const removeSourceListener = window.reacher.onSearchEvent("search:source-returned", (sourceStatus) => {
       setArrivals((current) => [...current, sourceStatus]);
     });
     const removeObservationListener = window.reacher.onSearchEvent("search:observations", (observations) => {
-      setLiveObservations((current) => [...current, ...observations].slice(-500));
+      const own = activeRunRef.current;
+      const current = own === null ? observations : observations.filter((observation) => observation.runId === own);
+      if (current.length > 0) {
+        setLiveObservations((previous) => [...previous, ...current].slice(-500));
+      }
     });
 
     return () => {
@@ -99,20 +143,32 @@ export function SearchView() {
     };
   }, [refreshRails]);
 
-  const activeSeed: SearchSeed = useMemo(() => ({ type: seedType, value: seedValue.trim() }), [seedType, seedValue]);
+  const activeSeed: SearchSeed = useMemo(() => ({ type: seedType, value: seedValue, ...(seedType === "parcel" && seedJurisdiction.trim() ? { jurisdiction: seedJurisdiction.trim() } : {}) }), [seedType, seedValue, seedJurisdiction]);
+  useEffect(() => {
+    sourcePlanRequest.current++;
+    setSourcePlan(null);
+    setSourcePlanStatus("");
+  }, [activeSeed]);
   const observations = useMemo(() => observationsForOutput(run, liveObservations), [liveObservations, run]);
   const selectedObservation = selectedObservationId
     ? observations.find((observation) => observation.id === selectedObservationId) ?? firstItem(observations)
     : firstItem(observations);
   const previewUrl = useMemo(() => websitePreviewUrl(run?.seed ?? activeSeed), [activeSeed, run?.seed]);
-  const sourceCounts = useMemo(() => sourceCountMap(observations), [observations]);
   const effectiveStatuses = run?.statuses ?? arrivals;
-  const sourceSections = useMemo(() => groupObservationsBySource(observations, effectiveStatuses), [effectiveStatuses, observations]);
-  const crossReferences = useMemo(() => buildCrossReferenceRows(run, observations), [observations, run]);
-  const selectedCrossReference = selectedObservation ? crossReferences.find((row) => row.observations.some((item) => item.id === selectedObservation.id)) : null;
-  const completedSources = effectiveStatuses.filter((source) => source.status === "returned").length;
-  const failedSources = effectiveStatuses.filter((source) => source.status === "failed").length;
-  const corroboratedFacts = crossReferences.filter((row) => row.strength > 1).length;
+
+  async function previewSources(): Promise<void> {
+    const requestId = ++sourcePlanRequest.current;
+    setSourcePlan(null);
+    setSourcePlanStatus("Checking local routing and access rules…");
+    const result = await invoke("search:preflight", { seed: activeSeed });
+    if (requestId !== sourcePlanRequest.current) return;
+    if (!result.ok) {
+      setSourcePlanStatus(result.error.message);
+      return;
+    }
+    setSourcePlan(result.value.sources);
+    setSourcePlanStatus(`${result.value.sources.filter((source) => source.disposition === "will_run").length} sources will run · ${result.value.sources.filter((source) => source.disposition === "skipped").length} skipped. Preview only; no provider was contacted.`);
+  }
 
   async function runSearch(pivotSeed?: SearchSeed): Promise<void> {
     const seed = pivotSeed ?? activeSeed;
@@ -120,13 +176,19 @@ export function SearchView() {
       setStatus("Enter a seed before searching");
       return;
     }
+    if (seed.type === "parcel" && !seed.jurisdiction?.trim()) {
+      setStatus("Enter a parcel jurisdiction before searching");
+      return;
+    }
 
     setRun(null);
+    setAssessment(null);
     setSelectedObservationId(null);
     setArrivals([]);
     setLiveObservations([]);
     setStatus(`${effortLabel(effort)} search started`);
     const runId = crypto.randomUUID();
+    activeRunRef.current = runId;
     setActiveRunId(runId);
 
     const result = await invoke(pivotSeed ? "search:pivot" : "search:run", { seed, runId, effort });
@@ -147,8 +209,13 @@ export function SearchView() {
       return;
     }
     const result = await invoke("search:cancel", { runId: activeRunId });
-    setStatus(result.ok && result.value.cancelled ? "Search cancelled" : "No active search to cancel");
-    setActiveRunId(null);
+    const cancelled = result.ok && result.value.cancelled;
+    setStatus(cancelled ? "Search cancelled" : "No active search to cancel");
+    // A cancelled run keeps showing as running until its own result arrives (runSearch clears it then), so the tree does not
+    // flash back to "not started" in between and then show partial evidence as if it were a fresh state.
+    if (!cancelled) {
+      setActiveRunId(null);
+    }
   }
 
   async function searchImage(): Promise<void> {
@@ -217,6 +284,235 @@ export function SearchView() {
     await refreshRails();
   }
 
+  async function saveSelectedObservationAsEntity(): Promise<void> {
+    if (!selectedObservation) return;
+    if (!graphEntityLabel.trim()) {
+      setStatus("Enter a display label before saving this evidence as an entity");
+      return;
+    }
+    const result = await invoke("entityGraph:saveObservation", {
+      observationId: selectedObservation.id,
+      type: graphEntityType,
+      label: graphEntityLabel.trim()
+    });
+    if (!result.ok) {
+      setStatus(result.error.message);
+      return;
+    }
+    setStatus(`Saved ${result.value.entity.label} to the evidence graph with its source record`);
+  }
+
+  async function importCorpus(): Promise<void> {
+    if (!corpusSourceName.trim()) {
+      setCorpusStatus("Enter the dataset or source name before importing.");
+      return;
+    }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) {
+      setCorpusStatus("Remove token-like query parameters from the source reference before importing.");
+      return;
+    }
+    const result = await invoke("corpus:import", {
+      accessBasis: corpusAccessBasis,
+      sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}),
+      ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {}),
+      identifierType: corpusIdentifierType,
+      identifierField: corpusIdentifierField
+    });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      return;
+    }
+    const imported: CorpusImportResponse = result.value;
+    if (imported.cancelled || !imported.manifest) {
+      setCorpusStatus("Import canceled; no data was stored.");
+      return;
+    }
+    const rowLabel = imported.manifest.recordCount === 1 ? "row" : "rows";
+    setCorpusStatus(`${imported.reusedExistingImport ? "Already imported" : "Quarantined and indexed"}: ${imported.manifest.originalName} · ${imported.manifest.recordCount.toLocaleString()} ${rowLabel} · SHA-256 ${imported.manifest.sha256.slice(0, 12)}…`);
+  }
+
+  async function importPdfText(): Promise<void> {
+    if (!corpusSourceName.trim()) {
+      setCorpusStatus("Enter the source or dataset name before choosing a PDF.");
+      return;
+    }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) {
+      setCorpusStatus("Remove token-like query parameters from the source reference before importing.");
+      return;
+    }
+    const result = await invoke("corpus:pdf-import", {
+      accessBasis: corpusAccessBasis,
+      sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}),
+      ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {})
+    });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      return;
+    }
+    const imported: PdfTextImportResponse = result.value;
+    if (imported.cancelled || !imported.manifest) {
+      setCorpusStatus("PDF import canceled; no data was stored.");
+      return;
+    }
+    const { manifest } = imported;
+    setCorpusStatus(`${imported.reusedExistingImport ? "Already indexed" : "PDF quarantined and indexed"}: ${manifest.originalName} · ${manifest.textPageCount}/${manifest.pageCount} text pages · ${manifest.extractedBytes.toLocaleString()} bytes · SHA-256 ${manifest.sha256.slice(0, 12)}…${manifest.textPageCount === 0 ? " · no selectable text; OCR is not included" : " · local only, not sent to AI"}`);
+  }
+
+  async function searchPdfText(): Promise<void> {
+    if (pdfTextQuery.trim().length < 3) {
+      setCorpusStatus("Enter at least three characters to search indexed PDF pages.");
+      return;
+    }
+    const result = await invoke("corpus:pdf-search", { query: pdfTextQuery.trim(), limit: 25 });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      return;
+    }
+    setPdfTextResults(result.value.results);
+    setCorpusStatus(`${result.value.results.length} local PDF page match${result.value.results.length === 1 ? "" : "es"}; snippets are page-cited and never submitted to a model.`);
+  }
+
+  async function importDocxText(): Promise<void> {
+    if (!corpusSourceName.trim()) { setCorpusStatus("Enter the source or dataset name before choosing a DOCX."); return; }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) { setCorpusStatus("Remove token-like query parameters from the source reference before importing."); return; }
+    const result = await invoke("corpus:docx-import", {
+      accessBasis: corpusAccessBasis, sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}), ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {})
+    });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    const imported: DocxTextImportResponse = result.value;
+    if (imported.cancelled || !imported.manifest) { setCorpusStatus("DOCX import canceled; no data was stored."); return; }
+    const { manifest } = imported;
+    setCorpusStatus(`${imported.reusedExistingImport ? "Already indexed" : "DOCX quarantined and indexed"}: ${manifest.originalName} · ${manifest.paragraphCount.toLocaleString()} text paragraphs · ${manifest.extractedBytes.toLocaleString()} bytes · SHA-256 ${manifest.sha256.slice(0, 12)}… · local only, not sent to AI`);
+  }
+
+  async function searchDocxText(): Promise<void> {
+    if (docxTextQuery.trim().length < 3) { setCorpusStatus("Enter at least three characters to search indexed DOCX paragraphs."); return; }
+    const result = await invoke("corpus:docx-search", { query: docxTextQuery.trim(), limit: 25 });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    setDocxTextResults(result.value.results);
+    setCorpusStatus(`${result.value.results.length} local DOCX paragraph match${result.value.results.length === 1 ? "" : "es"}; snippets are paragraph-cited and never submitted to a model.`);
+  }
+
+  async function importPptxText(): Promise<void> {
+    if (!corpusSourceName.trim()) { setCorpusStatus("Enter the source or dataset name before choosing a PPTX."); return; }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) { setCorpusStatus("Remove token-like query parameters from the source reference before importing."); return; }
+    const result = await invoke("corpus:pptx-import", {
+      accessBasis: corpusAccessBasis, sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}), ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {})
+    });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    const imported: PptxTextImportResponse = result.value;
+    if (imported.cancelled || !imported.manifest) { setCorpusStatus("PPTX import canceled; no data was stored."); return; }
+    const { manifest } = imported;
+    setCorpusStatus(`${imported.reusedExistingImport ? "Already indexed" : "PPTX quarantined and indexed"}: ${manifest.originalName} · ${manifest.textSlideCount}/${manifest.slideCount} text slides · ${manifest.extractedBytes.toLocaleString()} bytes · SHA-256 ${manifest.sha256.slice(0, 12)}… · shape/table text only (chart, notes and media omitted) · local only, not sent to AI`);
+  }
+
+  async function searchPptxText(): Promise<void> {
+    if (pptxTextQuery.trim().length < 3) { setCorpusStatus("Enter at least three characters to search indexed PPTX slides."); return; }
+    const result = await invoke("corpus:pptx-search", { query: pptxTextQuery.trim(), limit: 25 });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    setPptxTextResults(result.value.results);
+    setCorpusStatus(`${result.value.results.length} local PPTX slide match${result.value.results.length === 1 ? "" : "es"}; snippets are slide-cited and never submitted to a model.`);
+  }
+
+  async function importXlsxText(): Promise<void> {
+    if (!corpusSourceName.trim()) { setCorpusStatus("Enter the source or dataset name before choosing an XLSX workbook."); return; }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) { setCorpusStatus("Remove token-like query parameters from the source reference before importing."); return; }
+    const result = await invoke("corpus:xlsx-import", {
+      accessBasis: corpusAccessBasis, sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}), ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {})
+    });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    const imported: XlsxTextImportResponse = result.value;
+    if (imported.cancelled || !imported.manifest) { setCorpusStatus("XLSX import canceled; no data was stored."); return; }
+    const { manifest } = imported;
+    setCorpusStatus(`${imported.reusedExistingImport ? "Already indexed" : "XLSX quarantined and indexed"}: ${manifest.originalName} · ${manifest.cellCount.toLocaleString()} cells in ${manifest.sheetCount} sheets · ${manifest.hiddenSheetCount} hidden sheets and ${manifest.formulaCellCount.toLocaleString()} formulas excluded · ${manifest.extractedBytes.toLocaleString()} bytes · SHA-256 ${manifest.sha256.slice(0, 12)}… · local only, not sent to AI`);
+  }
+
+  async function searchXlsxText(): Promise<void> {
+    if (xlsxTextQuery.trim().length < 3) { setCorpusStatus("Enter at least three characters to search indexed XLSX cells."); return; }
+    const result = await invoke("corpus:xlsx-search", { query: xlsxTextQuery.trim(), limit: 25 });
+    if (!result.ok) { setCorpusStatus(result.error.message); return; }
+    setXlsxTextResults(result.value.results);
+    setCorpusStatus(`${result.value.results.length} local XLSX cell match${result.value.results.length === 1 ? "" : "es"}; values are cell-cited, dates remain raw, and matches are never submitted to a model.`);
+  }
+
+  async function searchCorpus(): Promise<void> {
+    if (!corpusLookupValue.trim()) {
+      setCorpusStatus("Enter an exact identifier to search imported records.");
+      return;
+    }
+    const result = await invoke("corpus:exact-search", {
+      identifierType: corpusIdentifierType,
+      identifierValue: corpusLookupValue.trim(),
+      limit: 25
+    });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      return;
+    }
+    setCorpusResults(result.value.results);
+    setCorpusStatus(`${result.value.results.length} exact local match${result.value.results.length === 1 ? "" : "es"}; similar identifiers are not included.`);
+  }
+
+  async function inspectCorpusArchive(): Promise<void> {
+    if (!corpusSourceName.trim()) {
+      setCorpusStatus("Enter the dataset or source name before choosing an archive.");
+      return;
+    }
+    if (sourceReferenceMayContainSecret(corpusSourceUrl)) {
+      setCorpusStatus("Remove token-like query parameters from the source reference before importing.");
+      return;
+    }
+    const result = await invoke("corpus:archive-inspect", {
+      accessBasis: corpusAccessBasis,
+      sourceName: corpusSourceName.trim(),
+      ...(corpusSourceUrl.trim() ? { sourceUrl: corpusSourceUrl.trim() } : {}),
+      ...(corpusSourceDate ? { sourceDate: corpusSourceDate } : {}),
+      identifierType: corpusIdentifierType,
+      identifierField: corpusIdentifierField
+    });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      return;
+    }
+    if ("cancelled" in result.value) {
+      setArchiveInspection(null);
+      setArchiveEntryIndex(null);
+      setCorpusStatus("Archive selection canceled.");
+      return;
+    }
+    setArchiveInspection(result.value);
+    const firstImportable = result.value.entries.find((entry) => entry.importable);
+    setArchiveEntryIndex(firstImportable?.index ?? null);
+    setCorpusStatus(`${result.value.entries.length} archive entr${result.value.entries.length === 1 ? "y" : "ies"} inspected · SHA-256 ${result.value.sha256.slice(0, 12)}… · paths are never extracted.`);
+  }
+
+  async function importCorpusArchiveEntry(): Promise<void> {
+    if (!archiveInspection || archiveEntryIndex === null) {
+      setCorpusStatus("Choose one supported CSV or JSON Lines entry first.");
+      return;
+    }
+    const result = await invoke("corpus:archive-import", { sessionToken: archiveInspection.sessionToken, entryIndex: archiveEntryIndex });
+    if (!result.ok) {
+      setCorpusStatus(result.error.message);
+      setArchiveInspection(null);
+      setArchiveEntryIndex(null);
+      return;
+    }
+    if (!result.value.manifest) {
+      setCorpusStatus("Archive entry was not imported.");
+      return;
+    }
+    const rowLabel = result.value.manifest.recordCount === 1 ? "row" : "rows";
+    setCorpusStatus(`${result.value.reusedExistingImport ? "Already imported" : "Quarantined and indexed"}: ${archiveInspection.originalName} · ${result.value.manifest.recordCount.toLocaleString()} ${rowLabel} · SHA-256 ${result.value.manifest.sha256.slice(0, 12)}…`);
+    setArchiveInspection(null);
+    setArchiveEntryIndex(null);
+  }
+
   async function sendSelectedToAgent(): Promise<void> {
     if (!selectedObservation) {
       return;
@@ -231,6 +527,17 @@ export function SearchView() {
       caseId: targetCase.id,
       missionBrief: missionBrief.trim() || undefined
     });
+    if (result.ok) {
+      // Shown as an interpretation, exactly as the run reported it: its citations and confidence are not recalculated here.
+      setAssessment({
+        agentName: agentName(agents, selectedAgentId),
+        title: result.value.finding.title,
+        summary: result.value.finding.summary,
+        sources: result.value.finding.sources,
+        confidence: result.value.finding.confidence,
+        about: `${selectedObservation.type}: ${selectedObservation.value}`
+      });
+    }
     setStatus(result.ok ? `Sent to ${agentName(agents, selectedAgentId)} for ${targetCase.title}` : result.error.message);
   }
 
@@ -334,7 +641,7 @@ export function SearchView() {
               <select className="field-control" value={seedType} onChange={(event) => setSeedType(event.target.value as SeedType)}>
                 {seedTypeValues.map((value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {value === "uei" ? "UEI (federal recipient)" : value === "cik" ? "SEC CIK (exact filer)" : value === "ein" ? "EIN (exact organization)" : value}
                   </option>
                 ))}
               </select>
@@ -346,12 +653,31 @@ export function SearchView() {
                 <input className="composer-input" value={seedValue} onChange={(event) => setSeedValue(event.target.value)} />
               </div>
             </label>
+            {seedType === "parcel" && (
+              <label className="compact-field">
+              Parcel jurisdiction
+                <input className="field-control" value={seedJurisdiction} onChange={(event) => setSeedJurisdiction(event.target.value)} placeholder="US-IL-COOK" required aria-describedby="parcel-jurisdiction-help" />
+                <small id="parcel-jurisdiction-help">For US-IL-COOK, the exact 14-digit PIN is sent to Cook County’s public API. Only current-year class, township, and neighborhood metadata are requested.</small>
+              </label>
+            )}
             <button className="composer-icon-button" type="button" aria-label="Search" title="Search" onClick={() => void runSearch()}>
               <Play size={18} aria-hidden="true" />
             </button>
             <button className="composer-icon-button" type="button" aria-label="Cancel search" title="Cancel search" disabled={!activeRunId} onClick={() => void cancelSearch()}>
               <Square size={18} aria-hidden="true" />
             </button>
+          </div>
+          <div className="search-source-preflight">
+            <button className="action-button" type="button" onClick={() => void previewSources()}>Preview sources</button>
+            {sourcePlanStatus && <p className="status-text" role="status">{sourcePlanStatus}</p>}
+            {sourcePlan && <ul aria-label="Source preflight results">
+              {sourcePlan.map((source) => <li key={source.sourceId}>
+                <strong>{source.label}</strong>
+                <span>{source.disposition === "will_run" ? "Will run" : "Skipped"}</span>
+                {source.reason && <small>{source.reason}</small>}
+                {source.policy && <small>Policy · {source.policy.accessMode} · {source.policy.jurisdiction} · {source.policy.coverage} · freshness: {source.policy.freshness} · <a href={source.policy.termsUrl} target="_blank" rel="noopener noreferrer">terms</a></small>}
+              </li>)}
+            </ul>}
           </div>
           <label className="compact-field">
             Mission brief for agent handoff
@@ -382,172 +708,226 @@ export function SearchView() {
           <span className="status-text" role="status">{status}</span>
         </section>
 
-        <section className="search-results-layout" aria-label="Search output">
-          <div className="search-evidence-panel">
-            <div className="output-header">
-              <div>
-                <h2 className="section-title">Evidence output</h2>
-                <p className="status-text">{observations.length} observations / {completedSources} sources returned / {failedSources} failed</p>
-              </div>
-              <span className="strength-pill">{corroboratedFacts} corroborated facts</span>
-            </div>
-            <div className="evidence-summary-grid" aria-label="Search evidence summary">
-              <EvidenceMetric label="Unique facts" value={`${crossReferences.length}`} />
-              <EvidenceMetric label="Corroborated" value={`${corroboratedFacts}`} />
-              <EvidenceMetric label="Single-source" value={`${Math.max(0, crossReferences.length - corroboratedFacts)}`} />
-            </div>
-            <section className="cross-reference-board" aria-labelledby="cross-reference-title">
-              <div className="source-evidence-header">
-                <div>
-                  <h3 id="cross-reference-title">Cross-reference board</h3>
-                  <p className="status-text">Facts are grouped by matching entity, type, and value across independent sources.</p>
-                </div>
-                <span className="strength-pill">{corroboratedFacts} matched</span>
-              </div>
-              <div className="cross-reference-list" role="list" aria-label="Cross-referenced facts">
-                {crossReferences.map((row) => (
-                  <button
-                    className="cross-reference-row"
-                    type="button"
-                    key={row.key}
-                    onClick={() => setSelectedObservationId(row.observations[0]?.id ?? null)}
-                  >
-                    <div className="cross-reference-main">
-                      <span className="evidence-type">{row.type}</span>
-                      <strong>{row.value}</strong>
-                      <small>{row.entity}</small>
-                    </div>
-                    <div className="cross-reference-sources" aria-label={`${row.sourceIds.length} matching sources`}>
-                      {row.sourceIds.map((sourceId) => (
-                        <span key={sourceId}>{sourceId}</span>
-                      ))}
-                    </div>
-                    <span className={`confidence-pill confidence-${row.band}`}>{confidenceLabel(row.band)}</span>
-                  </button>
-                ))}
-                {crossReferences.length === 0 ? <p className="status-text">Search observations will be cross-referenced here as sources return.</p> : null}
-              </div>
-            </section>
-            <div className="source-section-list">
-              {sourceSections.map((section) => (
-                <section className="source-evidence-section" key={section.sourceId} aria-labelledby={`source-${section.sourceId}`}>
-                  <div className="source-evidence-header">
-                    <div>
-                      <h3 id={`source-${section.sourceId}`}>{section.label}</h3>
-                      <p className="status-text">{section.observations.length} observations from {section.sourceId}</p>
-                    </div>
-                    <span className={`source-status-pill source-status-${section.status}`}>{section.status}</span>
+        <OsintResultsView
+          seed={run?.seed ?? activeSeed}
+          run={run}
+          phase={activeRunId ? "running" : run ? "complete" : "idle"}
+          runKey={activeRunId ?? run?.runId ?? null}
+          effort={effortLabel(effort)}
+          statuses={effectiveStatuses}
+          observations={observations}
+          selectedObservationId={selectedObservation?.id ?? null}
+          onSelectObservation={setSelectedObservationId}
+          assessment={assessment}
+          detailActions={
+            selectedObservation ? (
+              <>
+                <button className="action-button" type="button" onClick={() => void saveSelectedObservation()}>
+                  <Save size={16} aria-hidden="true" />
+                  Save node
+                </button>
+                {selectedObservation.kind !== "discovery" && <details className="entity-graph-save-menu">
+                  <summary>Save as entity</summary>
+                  <div className="entity-graph-save-fields">
+                    <label className="compact-field">Display label
+                      <input className="field-control" value={graphEntityLabel} maxLength={200} onChange={(event) => setGraphEntityLabel(event.target.value)} placeholder={selectedObservation.entity} />
+                    </label>
+                    <label className="compact-field">Entity type
+                      <select className="field-control" value={graphEntityType} onChange={(event) => setGraphEntityType(event.target.value as EntityType)}>
+                        {entityTypeValues.map((type) => <option value={type} key={type}>{type}</option>)}
+                      </select>
+                    </label>
+                    <button className="action-button" type="button" onClick={() => void saveSelectedObservationAsEntity()}>Save cited evidence</button>
+                    <small>This creates a separate entity and source assertion. It never merges records with similar names or identifiers.</small>
                   </div>
-                  <div className="evidence-list" role="list">
-                    {section.observations.map((observation) => {
-                      const band = observationBand(run, observation);
-                      return (
-                        <button
-                          className="evidence-row"
-                          type="button"
-                          aria-pressed={selectedObservation?.id === observation.id}
-                          key={observation.id}
-                          onClick={() => setSelectedObservationId(observation.id)}
-                        >
-                          <span className="evidence-type">{observation.type}</span>
-                          <strong>{observation.value}</strong>
-                          <span className="status-text">{observation.entity}</span>
-                          <span className={`confidence-pill confidence-${band}`}>{confidenceLabel(band)}</span>
-                          {observationSourceUrl(observation) ? <small>{observationSourceUrl(observation)}</small> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))}
-              {observations.length === 0 ? <p className="status-text">Run a search to build a cited evidence feed.</p> : null}
+                </details>}
+                <button className="action-button" type="button" onClick={() => void sendSelectedToAgent()}>
+                  <Bot size={16} aria-hidden="true" />
+                  Send to agent
+                </button>
+                <button
+                  className="action-button"
+                  type="button"
+                  onClick={() => void runSearch(pivotSeedForObservation(run?.seed.type ?? seedType, selectedObservation))}
+                >
+                  <GitBranch size={16} aria-hidden="true" />
+                  Pivot
+                </button>
+              </>
+            ) : null
+          }
+        />
+
+        <section className="detail-section" aria-label="Website preview">
+          <div className="output-header">
+            <h2 className="section-title">Website preview</h2>
+            <Globe size={18} aria-hidden="true" />
+          </div>
+          {previewUrl ? (
+            <iframe className="website-preview" title={`Preview of ${previewUrl}`} src={previewUrl} sandbox="allow-same-origin allow-scripts" />
+          ) : (
+            <p className="status-text">Domain searches show a live website preview here.</p>
+          )}
+        </section>
+
+        <section className="detail-section corpus-workspace" aria-labelledby="corpus-title">
+          <div className="output-header">
+            <Database size={18} aria-hidden="true" />
+            <div>
+              <h2 className="section-title" id="corpus-title">Local corpus</h2>
+              <p className="status-text">CSV / JSON Lines, one selected table entry from ZIP, or selectable text from PDF. Imports stay local and are never sent to an AI model. PDF extraction is limited to 25 MiB, 200 pages, 128 KiB/page, 5 MiB total text and 20 seconds; OCR is not included. Source/access details are your declarations, not independently verified.</p>
             </div>
           </div>
-
-          <aside className="search-detail-panel" aria-label="Search detail">
-            <section className="detail-section">
-              <div className="output-header">
-                <h2 className="section-title">Website preview</h2>
-                <Globe size={18} aria-hidden="true" />
+          <div className="corpus-import-grid">
+            <label className="compact-field">Declared access basis
+              <select className="field-control" value={corpusAccessBasis} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusAccessBasis(event.target.value as "public" | "authorized")}>
+                <option value="public">Public dataset</option>
+                <option value="authorized">I’m authorized to use it</option>
+              </select>
+            </label>
+            <label className="compact-field">Source or dataset name
+              <input className="field-control" value={corpusSourceName} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusSourceName(event.target.value)} maxLength={200} placeholder="Dataset title / publisher" />
+            </label>
+              <label className="compact-field">Source reference (stored, not fetched)
+                <input className="field-control" type="url" value={corpusSourceUrl} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusSourceUrl(event.target.value)} placeholder="https://…" />
+                {sourceReferenceMayContainSecret(corpusSourceUrl) ? <span className="status-text" role="alert">This link appears to include a token or secret in its query string. Remove it before importing.</span> : null}
+              </label>
+            <label className="compact-field">Source date (optional)
+              <input className="field-control" type="date" value={corpusSourceDate} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusSourceDate(event.target.value)} />
+            </label>
+            <label className="compact-field">Identifier type
+              <input className="field-control" value={corpusIdentifierType} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusIdentifierType(event.target.value)} maxLength={64} placeholder="uei, parcel_id:WA, …" />
+            </label>
+            <label className="compact-field">Identifier column / field
+              <input className="field-control" value={corpusIdentifierField} disabled={Boolean(archiveInspection)} onChange={(event) => setCorpusIdentifierField(event.target.value)} maxLength={128} />
+            </label>
+              <button className="action-button" type="button" onClick={() => void importCorpus()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose file and import
+              </button>
+              <button className="action-button" type="button" onClick={() => void inspectCorpusArchive()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose ZIP archive
+              </button>
+              <button className="action-button" type="button" onClick={() => void importPdfText()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose PDF and index text
+              </button>
+              <button className="action-button" type="button" onClick={() => void importDocxText()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose DOCX and index text
+              </button>
+              <button className="action-button" type="button" onClick={() => void importPptxText()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose PPTX and index text
+              </button>
+              <button className="action-button" type="button" onClick={() => void importXlsxText()} disabled={sourceReferenceMayContainSecret(corpusSourceUrl)}>
+                <FileUp size={16} aria-hidden="true" />
+                Choose XLSX and index cell values
+              </button>
+            </div>
+            <p className="status-text">XLSX imports keep visible-sheet cell values and sheet/cell citations on this computer. Formulas, hidden sheets, macros, links, and embedded objects are excluded; date-like numeric values stay raw and are not interpreted. Workbook text is not sent to AI.</p>
+            {archiveInspection ? (
+              <>
+              <p className="status-text" role="note">Source and identifier details above are locked to the values captured when this archive was inspected. Choose another archive to refresh its review.</p>
+              <div className="corpus-search-row">
+                <label className="compact-field">Supported entry in {archiveInspection.originalName}
+                  <select className="field-control" value={archiveEntryIndex ?? ""} onChange={(event) => setArchiveEntryIndex(event.target.value ? Number(event.target.value) : null)}>
+                    <option value="">Select an importable entry</option>
+                    {archiveInspection.entries.map((entry) => <option key={entry.index} value={entry.index} disabled={!entry.importable}>{entry.filename}{entry.importable ? ` · ${(entry.uncompressedSize / 1024).toFixed(1)} KiB` : ` · ${entry.reason ?? "Not importable"}`}</option>)}
+                  </select>
+                </label>
+                <button className="action-button" type="button" onClick={() => void importCorpusArchiveEntry()} disabled={archiveEntryIndex === null}>Import selected entry</button>
               </div>
-              {previewUrl ? (
-                <iframe className="website-preview" title={`Preview of ${previewUrl}`} src={previewUrl} sandbox="allow-same-origin allow-scripts" />
-              ) : (
-                <p className="status-text">Domain searches show a live website preview here.</p>
-              )}
-            </section>
-
-            <section className="detail-section">
-              <h2 className="section-title">Source plugins</h2>
-              <div className="source-plugin-grid">
-                {effectiveStatuses.map((source) => (
-                  <div className="source-plugin" key={`${source.sourceId}-${source.status}`}>
-                    <span>{source.label}</span>
-                    <strong>{source.status === "returned" ? `${source.observationCount}` : "failed"}</strong>
-                  </div>
-                ))}
-                {effectiveStatuses.length === 0 ? <p className="status-text">Sources appear as they return.</p> : null}
-              </div>
-            </section>
-
-            <section className="detail-section">
-              <h2 className="section-title">Selected evidence</h2>
-              {selectedObservation ? (
-                <div className="selected-evidence">
-                  <span className="mono-cell">{selectedObservation.source}</span>
-                  <strong>{selectedObservation.value}</strong>
-                  <p className="status-text">{selectedObservation.type} linked to {selectedObservation.entity}</p>
-                  <div className="selected-evidence-meta">
-                    <span className={`confidence-pill confidence-${observationBand(run, selectedObservation)}`}>{confidenceLabel(observationBand(run, selectedObservation))}</span>
-                    {observationSourceUrl(selectedObservation) ? <span>{observationSourceUrl(selectedObservation)}</span> : null}
-                  </div>
-                  {selectedCrossReference ? (
-                    <div className="cross-reference-detail">
-                      <strong>Cross-reference</strong>
-                      <span>{crossReferenceExplanation(selectedCrossReference)}</span>
-                      <div className="cross-reference-sources">
-                        {selectedCrossReference.sourceIds.map((sourceId) => (
-                          <span key={sourceId}>{sourceId}</span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                  <div className="action-row">
-                    <button className="action-button" type="button" onClick={() => void saveSelectedObservation()}>
-                      <Save size={16} aria-hidden="true" />
-                      Save node
-                    </button>
-                    <button className="action-button" type="button" onClick={() => void sendSelectedToAgent()}>
-                      <Bot size={16} aria-hidden="true" />
-                      Send to agent
-                    </button>
-                    <button
-                      className="action-button"
-                      type="button"
-                      onClick={() => void runSearch(pivotSeedForObservation(run?.seed.type ?? seedType, selectedObservation))}
-                    >
-                      <GitBranch size={16} aria-hidden="true" />
-                      Pivot
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="status-text">Select evidence to save, pivot, or hand to an agent.</p>
-              )}
-            </section>
-
-            <section className="detail-section">
-              <h2 className="section-title">Source density</h2>
-              <div className="density-list">
-                {[...sourceCounts.entries()].map(([source, count]) => (
-                  <div className="density-row" key={source}>
-                    <span>{source}</span>
-                    <strong>{count}</strong>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
+              </>
+            ) : null}
+          <div className="corpus-search-row">
+            <label className="compact-field">Exact identifier lookup
+              <input className="field-control" value={corpusLookupValue} onChange={(event) => setCorpusLookupValue(event.target.value)} maxLength={256} placeholder="Exact value; no fuzzy matching" />
+            </label>
+            <button className="action-button" type="button" onClick={() => void searchCorpus()}><SearchIcon size={16} aria-hidden="true" />Search local records</button>
+          </div>
+          <div className="corpus-search-row">
+            <label className="compact-field">Search indexed DOCX paragraphs
+              <input className="field-control" value={docxTextQuery} onChange={(event) => setDocxTextQuery(event.target.value)} maxLength={256} minLength={3} placeholder="At least three characters" />
+            </label>
+            <button className="action-button" type="button" onClick={() => void searchDocxText()}><SearchIcon size={16} aria-hidden="true" />Search DOCX text</button>
+          </div>
+          <div className="corpus-search-row">
+            <label className="compact-field">Search indexed PPTX slides
+              <input className="field-control" value={pptxTextQuery} onChange={(event) => setPptxTextQuery(event.target.value)} maxLength={256} minLength={3} placeholder="At least three characters" />
+            </label>
+            <button className="action-button" type="button" onClick={() => void searchPptxText()}><SearchIcon size={16} aria-hidden="true" />Search PPTX text</button>
+          </div>
+          <div className="corpus-search-row">
+            <label className="compact-field">Search indexed XLSX cell values
+              <input className="field-control" value={xlsxTextQuery} onChange={(event) => setXlsxTextQuery(event.target.value)} maxLength={256} minLength={3} placeholder="At least three characters" />
+            </label>
+            <button className="action-button" type="button" onClick={() => void searchXlsxText()}><SearchIcon size={16} aria-hidden="true" />Search XLSX cells</button>
+          </div>
+          <div className="corpus-search-row">
+            <label className="compact-field">Search indexed PDF pages
+              <input className="field-control" value={pdfTextQuery} onChange={(event) => setPdfTextQuery(event.target.value)} maxLength={256} minLength={3} placeholder="At least three characters" />
+            </label>
+            <button className="action-button" type="button" onClick={() => void searchPdfText()}><SearchIcon size={16} aria-hidden="true" />Search PDF text</button>
+          </div>
+          <p className="status-text" role="status">{corpusStatus}</p>
+          {corpusResults.length > 0 ? (
+            <ul className="corpus-result-list" aria-label="Exact local corpus matches">
+              {corpusResults.map((item) => (
+                <li className="corpus-result" key={item.id}>
+                  <div><strong>{item.sourceName}</strong><span>{item.locator} · {item.identifierType}: {item.identifierValue}</span></div>
+                  <small>Access basis: {item.accessBasis} · SHA-256 {item.sha256.slice(0, 12)}…{item.sourceDate ? ` · ${item.sourceDate}` : ""}</small>
+                  <details><summary>View inert record data</summary><pre>{JSON.stringify(item.record, null, 2)}</pre></details>
+                  {item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer">Source reference</a> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {pdfTextResults.length > 0 ? (
+            <ul className="corpus-result-list" aria-label="Local PDF page matches">
+              {pdfTextResults.map((item) => (
+                <li className="corpus-result" key={`${item.importId}-${item.pageNumber}`}>
+                  <div><strong>{item.sourceName}</strong><span>{item.originalName} · PDF page {item.pageNumber}</span></div>
+                  <small>Access basis: {item.accessBasis} · SHA-256 {item.sha256.slice(0, 12)}…{item.sourceDate ? ` · ${item.sourceDate}` : ""}</small>
+                  <p>{item.excerpt}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {docxTextResults.length > 0 ? (
+            <ul className="corpus-result-list" aria-label="Local DOCX paragraph matches">
+              {docxTextResults.map((item) => (
+                <li className="corpus-result" key={`${item.importId}-${item.paragraphNumber}`}>
+                  <div><strong>{item.sourceName}</strong><span>{item.originalName} · Word paragraph {item.paragraphNumber}</span></div>
+                  <small>Access basis: {item.accessBasis} · SHA-256 {item.sha256.slice(0, 12)}…{item.sourceDate ? ` · ${item.sourceDate}` : ""}</small>
+                  <p>{item.excerpt}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {pptxTextResults.length > 0 ? (
+            <ul className="corpus-result-list" aria-label="Local PPTX slide matches">
+              {pptxTextResults.map((item) => (
+                <li className="corpus-result" key={`${item.importId}-${item.slideNumber}`}>
+                  <div><strong>{item.sourceName}</strong><span>{item.originalName} · PowerPoint slide {item.slideNumber}</span></div>
+                  <small>Access basis: {item.accessBasis} · SHA-256 {item.sha256.slice(0, 12)}…{item.sourceDate ? ` · ${item.sourceDate}` : ""}</small>
+                  <p>{item.excerpt}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {xlsxTextResults.length > 0 ? (
+            <ul className="corpus-result-list" aria-label="Local XLSX cell matches">
+              {xlsxTextResults.map((item) => (
+                <li className="corpus-result" key={`${item.importId}-${item.sheetName}-${item.cellRef}`}>
+                  <div><strong>{item.sourceName}</strong><span>{item.originalName} · {item.sheetName}!{item.cellRef}</span></div>
+                  <small>Access basis: {item.accessBasis} · SHA-256 {item.sha256.slice(0, 12)}…{item.sourceDate ? ` · ${item.sourceDate}` : ""}</small>
+                  <p>{item.excerpt}</p>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </section>
       </main>
     </section>
@@ -564,184 +944,6 @@ function RailBlock(props: { readonly icon: ReactNode; readonly title: string; re
       <div className="rail-list">{props.children}</div>
     </div>
   );
-}
-
-function EvidenceMetric(props: { readonly label: string; readonly value: string }) {
-  return (
-    <div className="evidence-metric">
-      <strong>{props.value}</strong>
-      <span>{props.label}</span>
-    </div>
-  );
-}
-
-interface SourceEvidenceSection {
-  readonly sourceId: string;
-  readonly label: string;
-  readonly status: SourceStatus["status"];
-  readonly observations: readonly Observation[];
-}
-
-interface CrossReferenceRow {
-  readonly key: string;
-  readonly entity: string;
-  readonly type: string;
-  readonly value: string;
-  readonly sourceIds: readonly string[];
-  readonly strength: number;
-  readonly band: StrengthBand;
-  readonly observations: readonly Observation[];
-}
-
-function buildCrossReferenceRows(run: SearchRunResult | null, observations: readonly Observation[]): CrossReferenceRow[] {
-  const grouped = new Map<string, Observation[]>();
-  for (const observation of observations) {
-    const key = factKey(observation);
-    grouped.set(key, [...(grouped.get(key) ?? []), observation]);
-  }
-
-  const runEntities = run?.entities ?? [];
-  return [...grouped.entries()]
-    .map(([key, groupedObservations]) => {
-      const first = groupedObservations[0];
-      const matchingEntity = runEntities.find((entity) => factKey(entity) === key);
-      const sourceIds = matchingEntity?.sourceIds ?? [...new Set(groupedObservations.map((observation) => observation.source))].sort();
-      const strength = matchingEntity?.strength ?? sourceIds.length;
-      const band = matchingEntity?.band ?? bandFromStrength(strength);
-      return {
-        key,
-        entity: first.entity,
-        type: first.type,
-        value: first.value,
-        sourceIds,
-        strength,
-        band,
-        observations: groupedObservations
-      };
-    })
-    .sort((a, b) => b.strength - a.strength || a.type.localeCompare(b.type) || a.value.localeCompare(b.value));
-}
-
-function bandFromStrength(strength: number): StrengthBand {
-  if (strength >= 4) {
-    return "confirmed";
-  }
-  if (strength === 3) {
-    return "strong";
-  }
-  if (strength === 2) {
-    return "likely";
-  }
-  return "single-source";
-}
-
-function crossReferenceExplanation(row: CrossReferenceRow): string {
-  if (row.strength <= 1) {
-    return "Only one source reported this fact. Treat it as a lead until another source agrees.";
-  }
-  return `${row.sourceIds.length} independent sources reported the same ${row.type}: ${row.sourceIds.join(", ")}.`;
-}
-
-function groupObservationsBySource(
-  observations: readonly Observation[],
-  statuses: readonly SourceStatus[]
-): SourceEvidenceSection[] {
-  const sections = new Map<string, SourceEvidenceSection>();
-  for (const status of statuses) {
-    sections.set(status.sourceId, {
-      sourceId: status.sourceId,
-      label: status.label,
-      status: status.status,
-      observations: []
-    });
-  }
-
-  for (const observation of observations) {
-    const existing = sections.get(observation.source);
-    const nextObservations = [...(existing?.observations ?? []), observation];
-    sections.set(observation.source, {
-      sourceId: observation.source,
-      label: existing?.label ?? sourceLabel(observation.source),
-      status: existing?.status ?? "returned",
-      observations: nextObservations
-    });
-  }
-
-  return [...sections.values()]
-    .filter((section) => section.observations.length > 0 || section.status === "failed")
-    .sort((a, b) => b.observations.length - a.observations.length || a.label.localeCompare(b.label));
-}
-
-function sourceCountMap(observations: readonly Observation[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  for (const observation of observations) {
-    counts.set(observation.source, (counts.get(observation.source) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function observationsForOutput(run: SearchRunResult | null, liveObservations: readonly Observation[]): Observation[] {
-  if (!run) {
-    return [...liveObservations];
-  }
-  if (run.observations.length > 0) {
-    return [...run.observations];
-  }
-  return treeObservations(run.tree, run.runId, run.seed);
-}
-
-function treeObservations(root: SearchTreeNode, runId: string, seed: SearchSeed): Observation[] {
-  const observations: Observation[] = [];
-  const visit = (node: SearchTreeNode): void => {
-    if (node.kind === "observation" && node.observationId) {
-      observations.push({
-        id: node.observationId,
-        runId,
-        entity: node.entity ?? seed.value,
-        type: seed.type,
-        value: node.label,
-        source: node.sourceId ?? "search",
-        confidence: node.strength ?? 1,
-        raw: { treeNodeId: node.id }
-      });
-    }
-    for (const child of node.children) {
-      visit(child);
-    }
-  };
-  visit(root);
-  return observations;
-}
-
-function observationBand(run: SearchRunResult | null, observation: Observation): StrengthBand {
-  const entity = run?.entities.find((candidate) => factKey(candidate) === factKey(observation));
-  return entity?.band ?? "single-source";
-}
-
-function factKey(fact: Pick<Observation, "entity" | "type" | "value">): string {
-  return `${normalizeFactText(fact.entity)}\u0000${normalizeFactText(fact.type)}\u0000${normalizeFactText(fact.value)}`;
-}
-
-function normalizeFactText(value: string): string {
-  return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function confidenceLabel(band: StrengthBand): string {
-  if (band === "single-source") {
-    return "single source";
-  }
-  if (band === "likely") {
-    return "2 sources";
-  }
-  if (band === "strong") {
-    return "3 sources";
-  }
-  return "4+ sources";
-}
-
-function observationSourceUrl(observation: Observation): string | null {
-  const sourceUrl = observation.raw?.sourceUrl;
-  return typeof sourceUrl === "string" && sourceUrl.length > 0 ? sourceUrl : null;
 }
 
 function websitePreviewUrl(seed: SearchSeed): string | null {
@@ -788,8 +990,4 @@ function isCaseRecord(value: unknown): value is CaseRecord {
 
 function effortLabel(effort: SearchEffort): string {
   return effortOptions.find((option) => option.id === effort)?.label ?? "Standard";
-}
-
-function sourceLabel(source: string): string {
-  return source.toUpperCase();
 }

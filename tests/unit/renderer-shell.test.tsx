@@ -3,7 +3,7 @@
  * real investigative surfaces arrive. If stubs cannot route and keep shell
  * state now, later feature tests will hide foundation regressions.
  */
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import fs from "node:fs";
 import path from "node:path";
@@ -17,7 +17,7 @@ type RendererInvokeMock = (channel: string, request?: unknown) => Promise<Result
 type ScanEventMock = (channel: "scan:output", handler: (event: ScanOutputEvent) => void) => () => void;
 
 function createDefaultInvokeMock() {
-  return vi.fn<RendererInvokeMock>((channel) => {
+  return vi.fn<RendererInvokeMock>((channel, request) => {
     if (channel === "keys:list") {
       return Promise.resolve({ ok: true as const, value: { keys: [] } });
     }
@@ -93,6 +93,12 @@ function createDefaultInvokeMock() {
           recentAudit: []
         }
       });
+    }
+    if (channel === "entityGraph:list") {
+      return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [], relationships: [], candidates: [], truncated: false } });
+    }
+    if (channel === "qualityReview:list") {
+      return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: null, sampleHistory: [], sampleSources: [] } });
     }
     if (channel === "audit:query") {
       return Promise.resolve({ ok: true as const, value: { events: [] } });
@@ -247,10 +253,19 @@ function createDefaultInvokeMock() {
       });
     }
     if (channel === "settings:get") {
-      return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "false" } });
+      const key = (request as { key?: string } | undefined)?.key ?? "agents.cleanIdleStatuses";
+      return Promise.resolve({ ok: true as const, value: { key, value: key === "agents.cloudContextSharing" ? "true" : "false" } });
     }
     if (channel === "settings:set") {
-      return Promise.resolve({ ok: true as const, value: { key: "agents.cleanIdleStatuses", value: "true" } });
+      const key = (request as { key?: string } | undefined)?.key ?? "agents.cleanIdleStatuses";
+      const value = (request as { value?: string } | undefined)?.value ?? "true";
+      return Promise.resolve({ ok: true as const, value: { key, value } });
+    }
+    if (channel === "irsEoBmf:status") {
+      return Promise.resolve({ ok: true as const, value: { status: { installed: false, sha256: null, sizeBytes: null, recordCount: 0, fetchedTs: null } } });
+    }
+    if (channel === "irsEoBmf:install") {
+      return Promise.resolve({ ok: true as const, value: { status: { installed: false, sha256: null, sizeBytes: null, recordCount: 0, fetchedTs: null }, cancelled: true } });
     }
     if (channel === "cases:list") {
       return Promise.resolve({ ok: true as const, value: { cases: [] } });
@@ -397,6 +412,8 @@ beforeEach(() => {
         "system:ping",
         "system:pickImage",
         "dashboard:summary",
+        "entityGraph:list",
+        "entityGraph:saveObservation",
         "audit:query",
         "mobile:profiles",
         "mobile:detect",
@@ -416,6 +433,8 @@ beforeEach(() => {
         "agent:run",
         "settings:get",
         "settings:set",
+        "irsEoBmf:status",
+        "irsEoBmf:install",
         "search:run",
         "search:image",
         "search:usernameSweep",
@@ -470,6 +489,15 @@ it("renders every stub route and the settings route so the app boots and navigat
       expect(screen.getByRole("button", { name: "Add watch" })).toBeInTheDocument();
     } else if (route.id === "settings") {
       expect(screen.getByRole("heading", { name: "API keys" })).toBeInTheDocument();
+      expect(await screen.findByText("Not installed · searches will not contact or query the IRS")).toBeInTheDocument();
+      const installIrsIndex = screen.getByRole("button", { name: "Install Illinois index" });
+      await userEvent.click(installIrsIndex);
+      expect(invokeMock).toHaveBeenCalledWith("irsEoBmf:install", {});
+      const sharing = await screen.findByRole("checkbox", { name: "Always send mission brief and shared memory to the selected cloud model" });
+      await waitFor(() => expect(sharing).toBeEnabled());
+      expect(sharing).toBeChecked();
+      await userEvent.click(sharing);
+      expect(invokeMock).toHaveBeenCalledWith("settings:set", { key: "agents.cloudContextSharing", value: "false" });
     } else if (route.id === "search") {
       expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
     } else if (route.id === "cases") {
@@ -485,13 +513,16 @@ it("renders every stub route and the settings route so the app boots and navigat
     } else if (route.id === "analyzers") {
       expect(screen.getByRole("button", { name: "Build dorks" })).toBeInTheDocument();
     } else if (route.id === "mobile") {
-      expect(screen.getByRole("button", { name: "Refresh phone detection" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Detect phone" })).toBeInTheDocument();
     } else if (route.id === "social-analyzer") {
       expect(screen.getByRole("button", { name: "Analyze" })).toBeInTheDocument();
     } else if (route.id === "methodology-map") {
       expect(screen.getByRole("button", { name: "Export coverage spreadsheet" })).toBeInTheDocument();
     } else if (route.id === "audit-log") {
       expect(screen.getByRole("button", { name: "Apply filters" })).toBeInTheDocument();
+    } else if (route.id === "evidence-graph") {
+      expect(screen.getByRole("heading", { name: "Evidence graph" })).toBeInTheDocument();
+      expect(await screen.findByText(/No durable entities yet/)).toBeInTheDocument();
     } else {
       expect(screen.getByText(`surface:${route.id} status:stub`)).toBeInTheDocument();
     }
@@ -529,6 +560,7 @@ it("mobile route detects a trusted phone and collects live metadata snapshots", 
 
   expect((await screen.findAllByText("Bob's iPhone / iPhone16,2 (ios-one)")).length).toBeGreaterThan(0);
   expect(screen.getByRole("navigation", { name: "Mobile sections" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Detect phone" })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Toolbox" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Verification Report/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /Smart Flash/i })).toBeDisabled();
@@ -634,6 +666,9 @@ it("search route saves a selected tree node to a case so search output becomes e
         }
       });
     }
+    if (channel === "entityGraph:saveObservation") {
+      return Promise.resolve({ ok: true as const, value: { entity: { id: "entity-one", type: "domain", label: "Example domain", createdTs: "2026-10-01T00:00:00.000Z" } } });
+    }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
   });
@@ -659,6 +694,161 @@ it("search route saves a selected tree node to a case so search output becomes e
     );
   });
   expect(await screen.findByText("Saved to Acme review")).toBeInTheDocument();
+
+  await user.click(screen.getByText("Save as entity"));
+  await user.type(screen.getByPlaceholderText("example.com"), "Example domain");
+  await user.click(screen.getByRole("button", { name: "Save cited evidence" }));
+  await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("entityGraph:saveObservation", {
+    observationId: "obs-one", type: "unknown", label: "Example domain"
+  }));
+  expect(await screen.findByText("Saved Example domain to the evidence graph with its source record")).toBeInTheDocument();
+});
+
+it("browses all source records while hiding raw payloads and rejecting non-HTTP record links", async () => {
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "entityGraph:list") {
+      return Promise.resolve({ ok: true as const, value: {
+        entities: [], identifiers: [], assertions: [{
+          id: "source-one", sourceId: "fixture", recordUrl: "javascript:alert(1)", assertedType: "domain", assertedValue: "example.com",
+          rawSnapshot: { private: "should not display" }, fetchedTs: "2026-10-01T00:00:00.000Z"
+        }], relationships: [], candidates: [], truncated: false
+      } });
+    }
+    if (channel === "qualityReview:list") {
+      return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [{ sourceId: "fixture", label: "Fixture", attempts: 2, returned: 2, failed: 0, timeouts: 0, cancelled: 0, transportFailures: 0, httpFailures: 0, responseLimitFailures: 0, invalidJsonFailures: 0, invalidResponseFailures: 0, unclassifiedFailures: 0, emptyResponses: 1, observations: 2, reviewedRecords: 1, sourceRecordCount: 1, reviewEvents: 3, reviewedVerdicts: { confirmed: 1, incorrect: 0, duplicate: 0, missing: 0, error: 0, uncertain: 1 } }], sample: null, sampleHistory: [], sampleSources: [{ sourceId: "fixture", eligibleCount: 1 }] } });
+    }
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  expect(await screen.findByRole("button", { name: /domain: example.com/ })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Open source record" })).not.toBeInTheDocument();
+  expect(screen.queryByText("should not display")).not.toBeInTheDocument();
+  expect(await screen.findByText("confirmed: 1 · uncertain: 1")).toBeInTheDocument();
+  expect(screen.getByText("unique records per verdict; labels may overlap")).toBeInTheDocument();
+});
+
+it("draws a local probability sample and links the analyst verdict to its sampled member", async () => {
+  const user = userEvent.setup();
+  const item = { id: "sample-item-1", targetId: "source-one", ordinal: 1, assertedType: "domain", assertedValue: "example.com" };
+  const secondItem = { id: "sample-item-2", targetId: "source-two", ordinal: 2, assertedType: "domain", assertedValue: "other.example" };
+  const sample = { id: "sample-one", sourceId: "fixture", frameSize: 4, sampleSize: 2, selectionMethod: "simple-random-without-replacement" as const, createdTs: "2026-10-01T00:00:00Z", reviewedCount: 0, items: [item, secondItem] };
+  const completedSample = { ...sample, reviewedCount: 1, items: [{ ...item, verdict: "incorrect" as const }, secondItem] };
+  let currentSample: typeof sample | null = null;
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "entityGraph:list") return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [{ id: item.targetId, sourceId: "fixture", assertedType: item.assertedType, assertedValue: item.assertedValue, fetchedTs: "2026-10-01T00:00:00Z" }], relationships: [], candidates: [], truncated: false } });
+    if (channel === "qualityReview:list") return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: currentSample, sampleHistory: currentSample ? [{ id: currentSample.id, sourceId: currentSample.sourceId, frameSize: currentSample.frameSize, sampleSize: currentSample.sampleSize, selectionMethod: currentSample.selectionMethod, createdTs: currentSample.createdTs, reviewedCount: currentSample.reviewedCount }] : [], sampleSources: [{ sourceId: "fixture", eligibleCount: 4 }] } });
+    if (channel === "qualityReview:sample") { currentSample = sample; return Promise.resolve({ ok: true as const, value: { sample } }); }
+    if (channel === "qualityReview:create") { currentSample = completedSample; return Promise.resolve({ ok: true as const, value: { review: { id: "review-one", kind: "source_record", verdict: "incorrect", targetId: item.targetId, note: "", createdTs: "2026-10-01T00:01:00Z" }, metrics: [], sourceOutcomes: [], sample: completedSample, sampleHistory: [{ id: completedSample.id, sourceId: completedSample.sourceId, frameSize: completedSample.frameSize, sampleSize: completedSample.sampleSize, selectionMethod: completedSample.selectionMethod, createdTs: completedSample.createdTs, reviewedCount: completedSample.reviewedCount }], sampleSources: [{ sourceId: "fixture", eligibleCount: 4 }] } }); }
+    if (channel === "qualityReview:sampleGet") return Promise.resolve({ ok: true as const, value: { sample: currentSample } });
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  const drawButton = await screen.findByRole("button", { name: "Draw random sample" });
+  await waitFor(() => expect(drawButton).toBeEnabled());
+  expect(screen.getByRole("option", { name: "fixture · 4 saved" })).toBeInTheDocument();
+  await user.click(drawButton);
+  expect(await screen.findByText("Frozen frame: 4 eligible records · method: simple random without replacement · drawn 2026-10-01T00:00:00Z")).toBeInTheDocument();
+  await user.click(screen.getAllByRole("button", { name: "Review this sampled record" })[0]);
+  await user.selectOptions(screen.getByLabelText("Assessment"), "incorrect");
+  await user.click(screen.getByRole("button", { name: "Save review" }));
+  await waitFor(() => expect(invokeMock).toHaveBeenCalledWith("qualityReview:create", expect.objectContaining({ targetId: item.targetId, sampleItemId: item.id, verdict: "incorrect" })));
+  expect(await screen.findByText("Reviewer-assessed distribution among 1 reviewed sampled record: incorrect: 1/1 (100%). This describes only reviewed members of this draw, not source accuracy.")).toBeInTheDocument();
+});
+
+it("loads an explicitly selected historical review sample", async () => {
+  const user = userEvent.setup();
+  const oldSample = { id: "sample-old", sourceId: "fixture", frameSize: 3, sampleSize: 1, selectionMethod: "simple-random-without-replacement" as const, createdTs: "2026-09-30T12:00:00Z", reviewedCount: 1, items: [{ id: "old-item", targetId: "old-record", ordinal: 1, assertedType: "domain", assertedValue: "old.example", verdict: "confirmed" as const }] };
+  const latestSample = { ...oldSample, id: "sample-latest", createdTs: "2026-10-01T12:00:00Z", items: [{ ...oldSample.items[0], id: "latest-item", targetId: "latest-record", assertedValue: "latest.example" }] };
+  invokeMock.mockImplementation((channel: string, payload?: unknown) => {
+    if (channel === "entityGraph:list") return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [], relationships: [], candidates: [], truncated: false } });
+    if (channel === "qualityReview:list") return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: latestSample, sampleHistory: [latestSample, oldSample].map(({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount }) => ({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount })), sampleSources: [] } });
+    if (channel === "qualityReview:sampleGet") return Promise.resolve({ ok: true as const, value: { sample: (payload as { id?: string } | undefined)?.id === oldSample.id ? oldSample : latestSample } });
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  expect(await screen.findByText("1. domain: latest.example")).toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText("Saved review sample"), "sample-old");
+  expect(await screen.findByText("1. domain: old.example")).toBeInTheDocument();
+  expect(invokeMock).toHaveBeenCalledWith("qualityReview:sampleGet", { id: "sample-old" });
+});
+
+it("does not let an older sample fetch overwrite a later selection when responses resolve out of order", async () => {
+  const user = userEvent.setup();
+  const makeSample = (id: string, value: string) => ({ id, sourceId: "fixture", frameSize: 3, sampleSize: 1, selectionMethod: "simple-random-without-replacement" as const, createdTs: "2026-10-01T12:00:00Z", reviewedCount: 1, items: [{ id: `${id}-item`, targetId: `${id}-record`, ordinal: 1, assertedType: "domain", assertedValue: value, verdict: "confirmed" as const }] });
+  const sampleA = makeSample("sample-a", "a.example");
+  const sampleB = makeSample("sample-b", "b.example");
+  const latestSample = makeSample("sample-latest", "latest.example");
+  interface SampleGetResult { ok: true; value: { sample: typeof sampleA } }
+  let resolveA: (value: SampleGetResult) => void = () => {};
+  let resolveB: (value: SampleGetResult) => void = () => {};
+  invokeMock.mockImplementation((channel: string, payload?: unknown) => {
+    if (channel === "entityGraph:list") return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [], relationships: [], candidates: [], truncated: false } });
+    if (channel === "qualityReview:list") return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: latestSample, sampleHistory: [latestSample, sampleA, sampleB].map(({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount }) => ({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount })), sampleSources: [] } });
+    if (channel === "qualityReview:sampleGet") {
+      const id = (payload as { id?: string } | undefined)?.id;
+      if (id === sampleA.id) return new Promise<SampleGetResult>((resolve) => { resolveA = resolve; });
+      if (id === sampleB.id) return new Promise<SampleGetResult>((resolve) => { resolveB = resolve; });
+      return Promise.resolve({ ok: true as const, value: { sample: latestSample } });
+    }
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  expect(await screen.findByText("1. domain: latest.example")).toBeInTheDocument();
+  const history = screen.getByLabelText("Saved review sample");
+  await user.selectOptions(history, sampleA.id);
+  await user.selectOptions(history, sampleB.id);
+  await waitFor(() => expect(resolveA).toBeDefined());
+  await waitFor(() => expect(resolveB).toBeDefined());
+  act(() => { resolveB({ ok: true, value: { sample: sampleB } }); });
+  expect(await screen.findByText("1. domain: b.example")).toBeInTheDocument();
+  act(() => { resolveA({ ok: true, value: { sample: sampleA } }); });
+  expect(screen.getByText("1. domain: b.example")).toBeInTheDocument();
+  expect(screen.queryByText("1. domain: a.example")).not.toBeInTheDocument();
+});
+
+it("invalidates a pending historical read when refresh removes that sample", async () => {
+  const user = userEvent.setup();
+  const savedSample = { id: "sample-old", sourceId: "fixture", frameSize: 2, sampleSize: 1, selectionMethod: "simple-random-without-replacement" as const, createdTs: "2026-09-30T12:00:00Z", reviewedCount: 0, items: [{ id: "old-item", targetId: "old-record", ordinal: 1, assertedType: "domain", assertedValue: "old.example" }] };
+  const latestSample = { ...savedSample, id: "sample-latest", items: [{ ...savedSample.items[0], id: "latest-item", assertedValue: "latest.example" }] };
+  let listCalls = 0;
+  interface SavedResult { ok: true; value: { sample: typeof savedSample } }
+  let resolveSaved: (value: SavedResult) => void = () => {};
+  invokeMock.mockImplementation((channel: string, payload?: unknown) => {
+    if (channel === "entityGraph:list") return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [], relationships: [], candidates: [], truncated: false } });
+    if (channel === "qualityReview:list") {
+      listCalls++;
+      if (listCalls === 1) return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: latestSample, sampleHistory: [latestSample, savedSample].map(({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount }) => ({ id, sourceId, frameSize, sampleSize, selectionMethod, createdTs, reviewedCount })), sampleSources: [] } });
+      return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: null, sampleHistory: [], sampleSources: [] } });
+    }
+    if (channel === "qualityReview:sampleGet" && (payload as { id?: string } | undefined)?.id === savedSample.id) {
+      return new Promise<SavedResult>((resolve) => { resolveSaved = resolve; });
+    }
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  expect(await screen.findByText("1. domain: latest.example")).toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText("Saved review sample"), savedSample.id);
+  await waitFor(() => expect(resolveSaved).toBeDefined());
+  await user.click(screen.getByRole("button", { name: "Refresh evidence graph" }));
+  await waitFor(() => expect(screen.queryByLabelText("Saved review sample")).not.toBeInTheDocument());
+  act(() => { resolveSaved({ ok: true, value: { sample: savedSample } }); });
+  expect(screen.queryByText("1. domain: old.example")).not.toBeInTheDocument();
+});
+
+it("does not imply there are no saved runs when a completed run has no returned or failed outcomes", async () => {
+  invokeMock.mockImplementation((channel: string) => {
+    if (channel === "entityGraph:list") return Promise.resolve({ ok: true as const, value: { entities: [], identifiers: [], assertions: [], relationships: [], candidates: [], truncated: false } });
+    if (channel === "qualityReview:list") return Promise.resolve({ ok: true as const, value: { reviews: [], metrics: [], parserTargets: [], coverageScopes: [], sourceOutcomes: [], sample: null, sampleHistory: [], sampleSources: [] } });
+    return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
+  });
+  render(<MemoryRouter initialEntries={["/evidence-graph"]}><AppFrame /></MemoryRouter>);
+
+  expect(await screen.findByText("No returned or failed source outcomes to summarize yet.")).toBeInTheDocument();
 });
 
 it("search route sends a selected tree node to an agent so discoveries can continue in the agent hub", async () => {
@@ -712,7 +902,23 @@ it("search route sends a selected tree node to an agent so discoveries can conti
       return Promise.resolve({ ok: true as const, value: { cases: [openCase] } });
     }
     if (channel === "agent:run") {
-      return Promise.resolve({ ok: true as const, value: {} });
+      return Promise.resolve({
+        ok: true as const,
+        value: {
+          run: { id: "agent-run-one" },
+          finding: {
+            id: "finding-one",
+            runId: "agent-run-one",
+            agentId: "osint-agent",
+            caseId: "case-one",
+            title: "Registration data points to the seed",
+            summary: "The returned record names the seed domain; this alone does not establish who operates it.",
+            sources: ["obs-one"],
+            confidence: 1,
+            savedItemId: "item-one"
+          }
+        }
+      });
     }
 
     return Promise.resolve({ ok: true as const, value: { pong: true, nonce: "test", audited: true } });
@@ -738,6 +944,11 @@ it("search route sends a selected tree node to an agent so discoveries can conti
     );
   });
   expect(await screen.findByText("Sent to OSINT agent for Acme review")).toBeInTheDocument();
+  const assessment = screen.getByRole("region", { name: "AI assessment" });
+  expect(within(assessment).getByText("Interpretation")).toBeInTheDocument();
+  expect(within(assessment).getByText("Registration data points to the seed")).toBeInTheDocument();
+  expect(within(assessment).getByText("Confidence as reported · 1")).toBeInTheDocument();
+  expect(within(assessment).getByRole("button", { name: "obs-one" })).toBeInTheDocument();
 });
 
 it("search route cross-references matching observations across sources before showing evidence", async () => {
@@ -765,6 +976,7 @@ it("search route cross-references matching observations across sources before sh
                 type: "domain",
                 value: "example.com",
                 source: "rdap",
+                upstreamFamilyId: "rdap-registry",
                 confidence: 2,
                 raw: { sourceUrl: "https://rdap.example.test/example.com" }
               },
@@ -775,6 +987,7 @@ it("search route cross-references matching observations across sources before sh
                 type: "domain",
                 value: "example.com",
                 source: "crtsh",
+                upstreamFamilyId: "crt-sh",
                 confidence: 2,
                 raw: { sourceUrl: "https://crt.sh/?q=example.com" }
               },
@@ -785,6 +998,7 @@ it("search route cross-references matching observations across sources before sh
                 type: "hostname",
                 value: "mail.example.com",
                 source: "dns-doh",
+                upstreamFamilyId: "cloudflare-doh",
                 confidence: 1,
                 raw: {}
               }
@@ -795,6 +1009,7 @@ it("search route cross-references matching observations across sources before sh
                 type: "domain",
                 value: "example.com",
                 sourceIds: ["crtsh", "rdap"],
+                upstreamFamilyIds: ["crt-sh", "rdap-registry"],
                 strength: 2,
                 band: "likely"
               },
@@ -829,13 +1044,13 @@ it("search route cross-references matching observations across sources before sh
 
   await user.click(screen.getByRole("button", { name: "Search" }));
 
-  expect(await screen.findByRole("heading", { name: "Cross-reference board" })).toBeInTheDocument();
-  expect(screen.getByText("2 independent sources reported the same domain: crtsh, rdap.")).toBeInTheDocument();
-  expect(screen.getAllByText("2 sources").length).toBeGreaterThan(0);
-  const mailButtons = screen.getAllByRole("button", { name: /mail\.example\.com/i });
-  expect(mailButtons.length).toBeGreaterThan(0);
-  await user.click(mailButtons[0]);
-  expect(screen.getByText("Only one source reported this fact. Treat it as a lead until another source agrees.")).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Evidence", level: 2 })).toBeInTheDocument();
+  const list = screen.getByRole("list", { name: "Evidence facts" });
+  expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+  expect(screen.getByText("2 declared upstream families returned this exact domain; integrations: crtsh, rdap. Family declarations are recorded for comparison, not independently audited.")).toBeInTheDocument();
+  expect(within(list).getByText("Exact match · 2 upstream families")).toBeInTheDocument();
+  await user.click(within(list).getByRole("button", { name: /mail\.example\.com/i }));
+  expect(screen.getByText("Only one declared upstream family returned this fact. Treat it as a lead until another independent family agrees.")).toBeInTheDocument();
 });
 
 it("cases route renders timeline items so saved evidence can be verified", async () => {
